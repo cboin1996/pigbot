@@ -1,4 +1,4 @@
-FROM ubuntu:21.10
+FROM arm64v8/ubuntu:18.04
 # Install necessary packages.
 # Including rm -rf /var/lib/apt/lists/* saves memory by removing
 # cached items related to the upgrade command
@@ -10,7 +10,7 @@ RUN apt-get update -y && \
 
 WORKDIR /app
 COPY app .
-RUN pip install -r requirements.txt
+RUN pip3 install -r requirements.txt
 # Run as non-root user:
 RUN useradd --create-home appuser
 USER appuser
