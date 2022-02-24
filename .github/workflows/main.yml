@@ -12,7 +12,7 @@ jobs:
       DOCKER_IMAGE: cboin/pigbot
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      DOCKER_TARGET_PLATFORM: linux/arm/v7
+      DOCKER_TARGET_PLATFORM: linux/arm/v8
     steps:
       - name: Checkout the code
         uses: actions/checkout@v1
@@ -38,4 +38,5 @@ jobs:
           --platform ${{ steps.prepare.outputs.docker_platform }} \        
           --tag ${{ steps.prepare.outputs.docker_image }}:${{ steps.prepare.outputs.version }} \        
           --file ./Dockerfile \        
-          --output type=image, push=true .
+          --output type=image \
+          --push=true .
