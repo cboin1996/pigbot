@@ -7,3 +7,4 @@ Author: Christian Boin
 ## Goals
 
 - CLI with a variety of useful tools.
+- Other
