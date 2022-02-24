@@ -1,6 +1,7 @@
 import discord
 import sys
 from models import config
+from cli import talk
 client = discord.Client()
 
 @client.event
@@ -12,12 +13,12 @@ async def on_message(message):
     if message.author == client.user:
             return
     
-    if message.content.startswith("$hello"):
-        await message.channel.send('Oink')
+    response = talk.parse(message.content)
+    await message.channel.send(response)
 
 def main():
     pigbot_config = config.loader()
-    client.run(pigbot_config.token)
+    client.run(pigbot_config.pigbot_token)
 
 if __name__=="__main__":
     main()
