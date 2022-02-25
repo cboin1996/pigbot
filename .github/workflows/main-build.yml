@@ -2,6 +2,8 @@ name: Docker Build/Publish Image
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 jobs:
   build:
     runs-on: ubuntu-18.04
@@ -11,6 +13,7 @@ jobs:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       DOCKER_TARGET_PLATFORM: linux/arm64/v8
+      DOCKER_PUSH: false
     steps:
       - name: Checkout the code
         uses: actions/checkout@v1
@@ -57,7 +60,11 @@ jobs:
         if: success()
         run: |
           echo "${DOCKER_PASSWORD}" | docker login ${DOCKER_REGISTRY} --username "${DOCKER_USERNAME}" --password-stdin
-      - name: Run Buildx (push image)
-        if: success()
+      - name: Run Buildx
+        if: success()  && github.event_name == 'push'
         run: |
           docker buildx build --platform ${{ steps.prepare.outputs.docker_platform }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=false .
+      - name: Run Buildx (push image)
+        if: success()  && github.event_name == 'pull_request'
+        run: |
+          docker buildx build --platform ${{ steps.prepare.outputs.docker_platform }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=true .
