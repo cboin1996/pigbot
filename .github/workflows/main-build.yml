@@ -35,7 +35,7 @@ jobs:
           format: "${major}.${minor}.${patch}"
           # Optional path to check for changes. If any changes are detected in the path the
           # 'changed' output will true. Enter multiple paths separated by spaces.
-          change_path: "./"
+          change_path: "app/"
           # Named version, will be used as suffix for name version tag
           namespace: pigbot
           # Indicate whether short tags like 'v1' should be supported. If false only full
