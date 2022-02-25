@@ -17,6 +17,7 @@ jobs:
       - name: Checkout the code
         uses: actions/checkout@v1
       - name: Apply versioning
+        if: success()
         id: versioning
         uses: paulhatch/semantic-version@v4.0.2
         with:
@@ -42,7 +43,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: crazy-max/ghaction-docker-buildx@v1
         with:
-          version: latest
+          version: 0.7.1
       - name: Prepare
         if: success()
         id: prepare
