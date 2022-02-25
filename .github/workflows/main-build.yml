@@ -16,13 +16,14 @@ jobs:
       DOCKER_PUSH: false
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
 
       - name: Apply versioning
         if: success()
         id: versioning
         uses: paulhatch/semantic-version@v4.0.2
         with:
+          fetch-depth: 0
           # The prefix to use to identify tags
           tag_prefix: "v"
           # A string which, if present in a git commit, indicates that a change represents a
