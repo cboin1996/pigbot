@@ -23,6 +23,7 @@ jobs:
         id: versioning
         uses: paulhatch/semantic-version@v4.0.2
         with:
+          fetch-depth: 0
           # The prefix to use to identify tags
           tag_prefix: "v"
           # A string which, if present in a git commit, indicates that a change represents a
@@ -61,10 +62,10 @@ jobs:
         run: |
           echo "${DOCKER_PASSWORD}" | docker login ${DOCKER_REGISTRY} --username "${DOCKER_USERNAME}" --password-stdin
       - name: Run Buildx
-        if: success()  && github.event_name == 'push'
+        if: success()  && github.event_name == 'pull_request' # trigger only a build on PR's.
         run: |
           docker buildx build --platform ${{ steps.prepare.outputs.docker_platform }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=false .
       - name: Run Buildx (push image)
-        if: success()  && github.event_name == 'pull_request'
+        if: success()  && github.event_name == 'push' # trigger a build and push to docker registry
         run: |
           docker buildx build --platform ${{ steps.prepare.outputs.docker_platform }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=true .
