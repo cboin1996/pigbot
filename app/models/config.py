@@ -10,6 +10,8 @@ class PigBotSettings(BaseSettings):
         BaseSettings (pydantic.BaseSettings): BaseSettings object from pydantic
     """
     pigbot_token: str
+    pigbot_minecraft_server_ip: str
+    pigbot_discord_channels: List[str]
     class Config:
         config_path = os.path.join(os.path.dirname(sys.path[0]), '.env')
         env_file=config_path

@@ -1,14 +1,6 @@
 import random
 from models import art
 
-def parse(message: str):
-    """Parse a string and return a response.
-    """
-    if message.startswith("$hello"):
-        return 'oink'
-    if message.startswith("$ree"):
-        return random_response()
-
 def random_response() -> str:
     """Generate a random response
 

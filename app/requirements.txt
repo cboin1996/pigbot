@@ -1,3 +1,4 @@
 discord==1.7.3
 pydantic==1.9.0
 python-dotenv==0.19.2
+tabulate==0.8.9
