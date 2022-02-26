@@ -1,7 +1,7 @@
 
 class PigArt:
 
-    sitting_pig = """
+    sitting_pig = """                 
                      (\____/)  'oink.'
                      / @__@ \\
                     (  (oo)  )
@@ -11,7 +11,7 @@ class PigArt:
                    (/ /    \ \)
                     WW`----'WW"""
     
-    big_pig = """
+    big_pig = """                                   
     'Reeeeee'
                                                  __
              ____               ________     ,',.`.
