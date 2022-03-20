@@ -16,29 +16,35 @@ class Minecraft(commands.Cog):
         self.last_online = set()
         self.online_checker.start()
         self.config = config
+        self.failed_query_count = 0
+        self.allowed_failed_queries = config.pigbot_failed_query_limit
+        self.server_admin_uname = config.pigbot_minecraft_admin_uname
 
     @commands.command(
         brief="prints the status of the minecraft server"
     )
     async def print_status(self, ctx):
-        status = self.server.status()
-        if status.players.sample:
-            players_string = ', '.join(p.name for p in status.players.sample)
-        else:
-            players_string = ''
+        try:
+            status = self.server.status()
+            if status.players.sample:
+                players_string = ', '.join(p.name for p in status.players.sample)
+            else:
+                players_string = ''
 
-        response = ('{0} ({1}) v{2} {3}ms {4}/{5}{6}{7}'.format(
-            status.description,
-            self.ip,
-            status.version.name,
-            status.latency,
-            status.players.online,
-            status.players.max,
-            bool(players_string)*' ',  # Only include space if there is data.
-            players_string,
-        ))
-
-        await ctx.send(f"Minecraft server state:\n\t{response}")
+            response = ('{0} ({1}) v{2} {3}ms {4}/{5}{6}{7}'.format(
+                status.description,
+                self.ip,
+                status.version.name,
+                status.latency,
+                status.players.online,
+                status.players.max,
+                bool(players_string)*' ',  # Only include space if there is data.
+                players_string,
+            ))
+            msg = f"Minecraft server state:\n\t{response}"
+        except Exception as e:
+            msg = f"I cant reach the server @ ip {self.ip}. Is it down?"
+        await ctx.send(msg)
 
     @commands.command(
         brief="prints whos online playing minecraft."
@@ -57,7 +63,7 @@ class Minecraft(commands.Cog):
             if self.current_online != self.last_online:
                 logged_on  = self.current_online.difference(self.last_online)
                 logged_off = self.last_online.difference(self.current_online)
-                msg = "Detected Minecraft Server Players Update!\n"
+                msg = "Detected Minecraft Server Update!\n"
                 if len(logged_on) > 0:
                     msg += f"\t- Users logged on: {logged_on}\n"
                 if len(logged_off) > 0:
@@ -89,15 +95,28 @@ class Minecraft(commands.Cog):
         """
         try:
             query = self.server.query()
+            if self.failed_query_count != 0:
+                await self.message_to_channels(channel_ids, "It appears the server has come back on!")
+                # reset on success.
+                self.failed_query_count = 0
+
             return query
 
         except Exception as e:
-            msg = f"Oink oink! I cant seem to query the server @ ip: {self.ip}! Caught exception '{e}' in the process :("
-            logger.exception(msg)
+            msg = f"Oink oink! I cant query the server @ ip: {self.ip}! Exception: '{e}' :(. Try {self.failed_query_count+1}/{self.allowed_failed_queries}."
+            if self.failed_query_count+1 < self.allowed_failed_queries:
+                await self.message_to_channels(channel_ids, msg)
+            elif self.failed_query_count+1 == self.allowed_failed_queries:
+                msg += f"  Reached allowed retries <@{self.server_admin_uname}>. Disabling alerts until server is online again. For server status try $print_status."
+                await self.message_to_channels(channel_ids, msg)
+
+            # if context is passed ignore retries as user is trying manual check
             if ctx is not None:
+                msg = f"Oink oink! I cant query the server @ ip: {self.ip}! Exception: '{e}' :(."
                 await ctx.send(msg)
-            
-            await self.message_to_channels(channel_ids, msg)
+        
+            logger.exception(msg)
+            self.failed_query_count += 1
     
     async def message_to_channels(self, channel_ids: List[str], msg: str):
         """Outputs message to given discord channels
