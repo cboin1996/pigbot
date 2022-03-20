@@ -42,9 +42,11 @@ class Minecraft(commands.Cog):
                 players_string,
             ))
             msg = f"Minecraft server state:\n\t{response}"
+            await ctx.send(msg)
+
         except Exception as e:
             msg = f"I cant reach the server @ ip {self.ip}. Is it down?"
-        await ctx.send(msg)
+            await ctx.send(msg)
 
     @commands.command(
         brief="prints whos online playing minecraft."
