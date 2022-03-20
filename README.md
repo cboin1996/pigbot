@@ -1,4 +1,4 @@
-# pigbot v0.0.1
+# pigbot
 
 Discord bot playground written in python as practice for docker and python.
 
