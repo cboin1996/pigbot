@@ -111,11 +111,6 @@ class Minecraft(commands.Cog):
             elif self.failed_query_count+1 == self.allowed_failed_queries:
                 msg += f"  Reached allowed retries <@{self.server_admin_uname}>. Disabling alerts until server is online again. For server status try $print_status."
                 await self.message_to_channels(channel_ids, msg)
-
-            # if context is passed ignore retries as user is trying manual check
-            if ctx is not None:
-                msg = f"Oink oink! I cant query the server @ ip: {self.ip}! Exception: '{e}' :(."
-                await ctx.send(msg)
         
             logger.exception(msg)
             self.failed_query_count += 1
