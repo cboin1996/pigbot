@@ -98,7 +98,9 @@ class Minecraft(commands.Cog):
         try:
             query = self.server.query()
             if self.failed_query_count != 0:
-                await self.message_to_channels(channel_ids, "It appears the server has come back on!")
+                # check if server connection is restored
+                if self.failed_query_count+1 >= self.allowed_failed_queries:
+                    await self.message_to_channels(channel_ids, "My connection to the server has been restored!")
                 # reset on success.
                 self.failed_query_count = 0
 
@@ -106,7 +108,7 @@ class Minecraft(commands.Cog):
 
         except Exception as e:
             msg = f"Oink oink! I cant query the server @ ip: {self.ip}! Exception: '{e}' :(. Try {self.failed_query_count+1}/{self.allowed_failed_queries}."
-            if self.failed_query_count+1 < self.allowed_failed_queries:
+            if self.failed_query_count+1 < self.allowed_failed_queries and self.config.pigbot_log_failed_queries:
                 await self.message_to_channels(channel_ids, msg)
             elif self.failed_query_count+1 == self.allowed_failed_queries:
                 msg += f"  Reached allowed retries <@{self.server_admin_uname}>. Disabling alerts until server is online again. For server status try $print_status."

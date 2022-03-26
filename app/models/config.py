@@ -14,6 +14,8 @@ class PigBotSettings(BaseSettings):
     pigbot_discord_channels: List[str]
     pigbot_failed_query_limit: int
     pigbot_minecraft_admin_uname: str
+    pigbot_log_failed_queries: int = False
+
     class Config:
         config_path = os.path.join(os.path.dirname(sys.path[0]), '.env')
         env_file=config_path
