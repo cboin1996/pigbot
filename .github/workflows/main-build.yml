@@ -66,8 +66,8 @@ jobs:
       - name: Run Buildx
         if: success()  && github.event_name == 'pull_request' # trigger only a build on PR's.
         run: |
-          docker buildx build --platform ${{ steps.prepare.outputs.docker_platform_arm }}, ${{ steps.prepare.outputs.docker_platform_amd64 }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=false .
+          docker buildx build --platform ${{ steps.prepare.outputs.docker_platform_arm }},${{ steps.prepare.outputs.docker_platform_amd64 }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=false .
       - name: Run Buildx (push image)
         if: success()  && github.event_name == 'push' # trigger a build and push to docker registry
         run: |
-          docker buildx build --platform ${{ steps.prepare.outputs.docker_platform_arm }}, ${{ steps.prepare.outputs.docker_platform_amd64 }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=true .
+          docker buildx build --platform ${{ steps.prepare.outputs.docker_platform_arm }},${{ steps.prepare.outputs.docker_platform_amd64 }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=true .
