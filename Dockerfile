@@ -1,11 +1,11 @@
-FROM arm64v8/ubuntu:18.04
+FROM arm64v8/ubuntu:20.04
 # Install necessary packages.
 # Including rm -rf /var/lib/apt/lists/* saves memory by removing
 # cached items related to the upgrade command
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && apt-get -y upgrade \
     && apt-get install -y python3-pip \
-    && rm -rf /var/lib/apt/lists/* 
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY app .

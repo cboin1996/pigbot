@@ -12,7 +12,8 @@ jobs:
       DOCKER_IMAGE: cboin/pigbot
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      DOCKER_TARGET_PLATFORM: linux/arm64/v8
+      DOCKER_TARGET_PLATFORM_ARM: linux/arm64/v8
+      DOCKER_TARGET_PLATFORM_x64: linux/amd64
       DOCKER_PUSH: false
     steps:
       - name: Checkout the code
@@ -53,8 +54,9 @@ jobs:
         if: success()
         id: prepare
         run: |
-          echo ::set-output name=docker_platform::${DOCKER_TARGET_PLATFORM}        
-          echo ::set-output name=docker_image::${DOCKER_REGISTRY}/${DOCKER_IMAGE}        
+          echo ::set-output name=docker_platform_arm::${DOCKER_TARGET_PLATFORM_ARM}
+          echo ::set-output name=docker_platform_amd64::${DOCKER_TARGET_PLATFORM_x64}
+          echo ::set-output name=docker_image::${DOCKER_REGISTRY}/${DOCKER_IMAGE}
           echo ::set-output name=version::${{ steps.versioning.outputs.version}}
 
       - name: Docker Login
@@ -64,8 +66,8 @@ jobs:
       - name: Run Buildx
         if: success()  && github.event_name == 'pull_request' # trigger only a build on PR's.
         run: |
-          docker buildx build --platform ${{ steps.prepare.outputs.docker_platform }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=false .
+          docker buildx build --platform ${{ steps.prepare.outputs.docker_platform_arm }}, ${{ steps.prepare.outputs.docker_platform_amd64 }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=false .
       - name: Run Buildx (push image)
         if: success()  && github.event_name == 'push' # trigger a build and push to docker registry
         run: |
-          docker buildx build --platform ${{ steps.prepare.outputs.docker_platform }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=true .
+          docker buildx build --platform ${{ steps.prepare.outputs.docker_platform_arm }}, ${{ steps.prepare.outputs.docker_platform_amd64 }} --tag ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} --file ./Dockerfile -o type=image,push=true .
