@@ -1,5 +1,6 @@
 import logging
 
+
 def set_logger_config_globally(timestamp: str) -> None:
     """Sets the python logging module settings for output
     to stdout and to file.
@@ -10,7 +11,5 @@ def set_logger_config_globally(timestamp: str) -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        handlers=[
-            logging.StreamHandler()
-        ]
+        handlers=[logging.StreamHandler()],
     )
