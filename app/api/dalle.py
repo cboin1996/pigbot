@@ -130,7 +130,9 @@ class Dalle(commands.Cog):
             return
 
         # obtain model paths from server
-        model_paths = await self.get_dalle_browse(ctx, parsed_args.dalle_sha, parsed_args.vqgan_sha)
+        model_paths = await self.get_dalle_browse(
+            ctx, parsed_args.dalle_sha, parsed_args.vqgan_sha
+        )
         if model_paths is None:
             return
 
@@ -254,9 +256,8 @@ class Dalle(commands.Cog):
         endpoint = self.url + f"/show?n_predictions={n_predictions}"
         try:
             payload = QueryDalleBody(model_paths=model_paths, queries=queries)
-            logger.info(payload.json())
             async with aiohttp.ClientSession() as session:
-                async with session.post(endpoint, json=payload.dict()):
+                async with session.post(endpoint, json=payload.dict()) as response:
                     if response.status != 200:
                         return await send_not_httpok_msg(ctx, endpoint, response)
                     else:

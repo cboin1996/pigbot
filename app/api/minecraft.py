@@ -68,7 +68,7 @@ class Minecraft(commands.Cog):
 
         except Exception as e:
             msg = f"Received exception trying print_status for server @ ip {self.ip}! "
-            description =  f"Exception: '{e}'"
+            description = f"Exception: '{e}'"
             logger.exception(msg + description)
             await ctx.send(embed=Embed(title=msg, description=description))
 
@@ -98,11 +98,13 @@ class Minecraft(commands.Cog):
                     self.bot,
                     self.config.pigbot_discord_channels,
                     f"IP change detected!",
-                    description=f"<@{self.server_admin_uname}> previous ip {self.ip} --> current ip {current_ip}) :)"
+                    description=f"<@{self.server_admin_uname}> previous ip {self.ip} --> current ip {current_ip}) :)",
                 )
                 async with self.minecraft_server_lock:
                     self.ip = current_ip
-                    self.server = await MinecraftServer.async_lookup(f"{current_ip}:{self.port}")
+                    self.server = await MinecraftServer.async_lookup(
+                        f"{current_ip}:{self.port}"
+                    )
 
             else:
                 logger.debug(f"No ip change detected for server with ip: {self.ip}")
@@ -181,8 +183,10 @@ class Minecraft(commands.Cog):
             if self.failed_query_count != 0:
                 # check if server connection is restored
                 if self.failed_query_count + 1 >= self.allowed_failed_queries:
-                    await message_to_channels(self.bot,
-                        channel_ids, "My connection to the server has been restored!"
+                    await message_to_channels(
+                        self.bot,
+                        channel_ids,
+                        "My connection to the server has been restored!",
                     )
                 # reset on success.
                 self.failed_query_count = 0
@@ -191,15 +195,19 @@ class Minecraft(commands.Cog):
 
         except Exception as e:
             title = f"Oink oink! I cant query the server @ ip: {self.ip}!"
-            description=f"Exception: '{e}' :(. Try {self.failed_query_count+1}/{self.allowed_failed_queries}."
+            description = f"Exception: '{e}' :(. Try {self.failed_query_count+1}/{self.allowed_failed_queries}."
             if (
                 self.failed_query_count + 1 < self.allowed_failed_queries
                 and self.config.pigbot_log_failed_queries
             ):
-                await message_to_channels(self.bot, channel_ids, title, description=description)
+                await message_to_channels(
+                    self.bot, channel_ids, title, description=description
+                )
             elif self.failed_query_count + 1 == self.allowed_failed_queries:
                 description += f"  \nReached allowed retries <@{self.server_admin_uname}>. Disabling alerts until server is online again. For server status try $print_status."
-                await message_to_channels(self.bot, channel_ids, title, description=description)
+                await message_to_channels(
+                    self.bot, channel_ids, title, description=description
+                )
 
             # if context is passed ignore retries as user is trying manual check
             if ctx is not None:
@@ -207,7 +215,7 @@ class Minecraft(commands.Cog):
                 description = f"Exception: '{e}' :(."
                 await ctx.send(embed=Embed(title=title, description=description))
 
-            logger.exception(title+description)
+            logger.exception(title + description)
             self.failed_query_count += 1
 
 
