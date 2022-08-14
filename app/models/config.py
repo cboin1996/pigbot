@@ -13,8 +13,9 @@ class PigBotSettings(BaseSettings):
 
     pigbot_token: str
     pigbot_minecraft_server_ip: str
+    pigbot_minecraft_server_port: int
     pigbot_discord_channels: List[str]
-    pigbot_failed_query_limit: int
+    pigbot_failed_query_limit: int = 25565
     pigbot_minecraft_admin_uname: str
     pigbot_log_failed_queries: bool = False
     pigbot_minecraft_enable: bool = True
@@ -22,6 +23,7 @@ class PigBotSettings(BaseSettings):
     pigbot_dalle_enable: bool = True
     pigbot_dalle_ip: str = "localhost"
     pigbot_dalle_port: int = 8000
+    pigbot_minecraft_local_server_ip_detection_enabled: bool = False
 
     class Config:
         config_path = os.path.join(os.path.dirname(sys.path[0]), ".env")

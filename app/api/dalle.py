@@ -2,6 +2,7 @@ from argparse import ArgumentParser, ArgumentError
 import logging
 from typing import List, Optional, Dict
 import sys
+import asyncio
 
 from discord.ext import tasks, commands
 from models import config
@@ -12,6 +13,13 @@ import shlex
 import io
 import aiohttp
 import os
+
+from .common import (
+    get_ip,
+    send_chunked_messaged,
+    send_not_httpok_msg,
+    send_generic_error_msg,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +96,21 @@ class Dalle(commands.Cog):
             dest="number_of_images",
             help="number of images to produce for each query",
             type=int,
-            choices=range(1, 4),
+            choices=range(1, 5),
+        )
+        parser.add_argument(
+            "-dalle_sha",
+            dest="dalle_sha",
+            help="commit sha for the dalle-mini model (if none, uses dalle-ays defaults)",
+            type=str,
+            default="",
+        )
+        parser.add_argument(
+            "-vqgan_sha",
+            dest="vqgan_sha",
+            help="commit sha for the vqgan model (if none, uses dalle-ays defaults)",
+            type=str,
+            default="",
         )
         try:
             parsed_args = parser.parse_args(shlex.split(arg))
@@ -108,7 +130,7 @@ class Dalle(commands.Cog):
             return
 
         # obtain model paths from server
-        model_paths = await self.get_dalle_browse(ctx)
+        model_paths = await self.get_dalle_browse(ctx, parsed_args.dalle_sha, parsed_args.vqgan_sha)
         if model_paths is None:
             return
 
@@ -154,11 +176,10 @@ class Dalle(commands.Cog):
     @commands.command(brief="tell dalle-ays to show the images on disk")
     async def dalle_images(self, ctx):
         lyst = await self.get_image_list(ctx)
-        await ctx.send(
-            embed=Embed(
-                title="Here the images on disk for dalle-ays: ",
-                description="\n".join(lyst),
-            )
+        # we are limited to 4000 characters in embed description, so we will
+        # break it up here
+        await send_chunked_messaged(
+            ctx, "Here the images on disk for dalle-ays: ", "\n".join(lyst), 4000
         )
 
     @commands.command(brief="tell dalle to pull a model")
@@ -167,12 +188,12 @@ class Dalle(commands.Cog):
         model_paths = await self.get_pull(ctx)
         if model_paths is None:
             return
-        if not model_paths:
-            await ctx.send(
-                embed=Embed(
-                    title="Dalle-ays has models available on disk!",
-                    description=model_paths,
-                )
+        if model_paths:
+            await send_chunked_messaged(
+                ctx,
+                "It appears there are models on disk!",
+                str(model_paths.json()),
+                4000,
             )
 
     @commands.command(brief="see whats under the hood!")
@@ -180,19 +201,23 @@ class Dalle(commands.Cog):
         model_paths = await self.get_dalle_browse(ctx)
         if model_paths is None:
             return
-        elif model_paths == False:
+        elif not model_paths:
             await ctx.send(
                 embed=Embed(
                     title=f"Looks like theres no models downloaded yet! Try using $pull to get the latest!"
                 )
             )
         else:
-            embed = Embed(
-                title="It appears there are models on disk!", description=model_paths
+            await send_chunked_messaged(
+                ctx,
+                "It appears there are models on disk!",
+                str(model_paths.json()),
+                4000,
             )
-            await ctx.send(embed=embed)
 
-    async def get_dalle_browse(self, ctx) -> Optional[ModelPaths]:
+    async def get_dalle_browse(
+        self, ctx, dalle_sha: str = "", vqgan_sha: str = ""
+    ) -> Optional[ModelPaths]:
         """Helper function for getting model paths from dalle-ays
 
         Returns:
@@ -200,15 +225,18 @@ class Dalle(commands.Cog):
         """
         model_paths = None
         endpoint = self.url + "/browse"
+        query_params = None
+        if dalle_sha != "" and vqgan != "":
+            query_params = {"dalle_sha": dalle_sha, "vqgan_sha": vqgan_sha}
         try:
-            response = requests.get(endpoint)
-            if response.status_code != 200:
-                send_not_httpok_msg(self, ctx, endpoint, response)
-            model_paths = ModelPaths.parse_obj(response.json())
-        except Exception as e:
-            await self.send_generic_error_msg(ctx, endpoint, e)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(endpoint, params=query_params) as response:
+                    if response.status != 200:
+                        return await send_not_httpok_msg(ctx, endpoint, response)
 
-        return model_paths
+                    return ModelPaths.parse_obj(await response.json())
+        except Exception as e:
+            await send_generic_error_msg(ctx, endpoint, e)
 
     async def post_model_show(
         self, ctx, model_paths: ModelPaths, queries: List[str], n_predictions=int
@@ -226,39 +254,43 @@ class Dalle(commands.Cog):
         endpoint = self.url + f"/show?n_predictions={n_predictions}"
         try:
             payload = QueryDalleBody(model_paths=model_paths, queries=queries)
-            response = requests.post(endpoint, data=payload.json())
-            if response.status_code != 200:
-                send_not_httpok_msg(self, ctx, endpoint, response)
-            else:
-                return ImagePathResponse.parse_obj(response.json())
+            logger.info(payload.json())
+            async with aiohttp.ClientSession() as session:
+                async with session.post(endpoint, json=payload.dict()):
+                    if response.status != 200:
+                        return await send_not_httpok_msg(ctx, endpoint, response)
+                    else:
+                        return ImagePathResponse.parse_obj(await response.json())
 
         except Exception as e:
-            await self.send_generic_error_msg(ctx, endpoint, e)
+            await send_generic_error_msg(ctx, endpoint, e)
 
     async def get_pull(self, ctx) -> Optional[ModelPaths]:
         """Helper for performing a get request to dalle-ays /pull endpoint."""
         endpoint = f"{self.url}" + "/pull"
         try:
-            response = requests.get(endpoint)
-            if response.status_code != 200:
-                send_not_httpok_msg(self, ctx, endpoint, response)
-            model_paths = ModelPaths.parse_obj(response.json())
-            if model_paths:
-                return model_paths
+            async with aiohttp.ClientSession() as session:
+                async with session.get(endpoint) as response:
+                    if response.status != 200:
+                        return await send_not_httpok_msg(ctx, endpoint, response)
+
+                    return ModelPaths.parse_obj(await response.json())
 
         except Exception as e:
-            await self.send_generic_error_msg(ctx, endpoint, e)
+            await send_generic_error_msg(ctx, endpoint, e)
 
     async def get_image_list(self, ctx) -> List[str]:
         """Helper for listing images"""
         endpoint = f"{self.url}" + "/images"
         try:
-            response = requests.get(endpoint)
-            if response.status_code != 200:
-                send_not_httpok_msg(self, ctx, endpoint, response)
-            return response.json()
+            async with aiohttp.ClientSession() as session:
+                async with session.get(endpoint) as response:
+                    if response.status != 200:
+                        return await send_not_httpok_msg(ctx, endpoint, response)
+
+                    return await response.json()
         except Exception as e:
-            await self.send_generic_error_msg(ctx, endpoint, e)
+            await send_generic_error_msg(ctx, endpoint, e)
 
     async def get_images(self, ctx, image_path: List[str]):
         """Helper for getting images"""
@@ -269,26 +301,6 @@ class Dalle(commands.Cog):
         async with aiohttp.ClientSession() as session:
             async with session.get(endpoint) as response:
                 if response.status != 200:
-                    return await self.send_generic_error_msg(ctx, endpoint, response)
+                    return await send_not_httpok_msg(ctx, endpoint, response)
                 data = io.BytesIO(await response.read())
                 return data
-
-    async def send_not_httpok_msg(self, ctx, endpoint, response):
-        logger.exception(
-            f"Error from server at {endpoint}. \n Code={response.status_code}, \n Body={response.json()}"
-        )
-        return await ctx.send(
-            embed=Embed(
-                title=f"Error from server at {endpoint}",
-                description=f"Code={response.status_code}, \nBody={response.json()}",
-            )
-        )
-
-    async def send_generic_error_msg(self, ctx, endpoint: str, e: Exception()):
-        logger.exception(f"Error trying to reach server at {endpoint}: {e}")
-        return await ctx.send(
-            embed=Embed(
-                title=f"Error from server at {endpoint}",
-                description=f"Exception occurred: {e}",
-            )
-        )

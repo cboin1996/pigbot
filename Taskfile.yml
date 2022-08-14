@@ -70,7 +70,7 @@ tasks:
     cmds:
       - echo "PIGBOT_TOKEN=" >> .env
       - echo "PIGBOT_MINECRAFT_SERVER_IP=" >> .env
-      - echo "PIGBOT_DISCORD_CHANNELS=" >> .env
+      - echo "PIGBOT_DISCORD_CHANNELS=[]" >> .env
       - echo "PIGBOT_FAILED_QUERY_LIMIT=3 >> .env
       - echo "PIGBOT_MINECRAFT_ADMIN_UNAME=" >> .env
       - echo "PIGBOT_LOG_FAILED_QUERIES=False" >> .env
