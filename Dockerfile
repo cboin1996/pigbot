@@ -1,4 +1,4 @@
-FROM arm64v8/ubuntu:20.04
+FROM ubuntu:20.04
 # Install necessary packages.
 # Including rm -rf /var/lib/apt/lists/* saves memory by removing
 # cached items related to the upgrade command
@@ -9,8 +9,8 @@ RUN apt-get update -y && apt-get -y upgrade \
 
 WORKDIR /app
 COPY app .
-RUN pip3 install -r requirements.txt
+RUN pip3 install --upgrade pip && pip3 install -r requirements.txt
 # Run as non-root user:
 RUN useradd --create-home appuser
 USER appuser
-ENTRYPOINT ["python3", "app.py"]
+ENTRYPOINT ["python3", "main.py"]
