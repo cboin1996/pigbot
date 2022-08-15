@@ -8,19 +8,21 @@ Author: Christian Boin
 
 Note any env vars with a `None` default value are needed to run the server.
 
-| Variable                             | Default     | Type      |
-| ------------------------------------ | ----------- | --------- |
-| PIGBOT_TOKEN                         |             | str       |
-| PIGBOT_MINECRAFT_SERVER_IP           |             | str       |
-| PIGBOT_DISCORD_CHANNELS              |             | List[str] |
-| PIGBOT_FAILED_QUERY_LIMIT            | 3           | int       |
-| PIGBOT_MINECRAFT_ADMIN_UNAME         |             | str       |
-| PIGBOT_LOG_FAILED_QUERIES            | False       | bool      |
-| PIGBOT_MINECRAFT_ENABLE              | True        | bool      |
-| PIGBOT_MINECRAFT_ONLINE_CHECK_ENABLE | True        | bool      |
-| DALLE_ENABLE                         | True        | bool      |
-| PIGBOT_DALLE_IP                      | "localhost" | str       |
-| PIGBOT_DALLE_PORT                    | int         | 8000      |
+| Variable                                           | Default     | Type      | Description                                        |
+| -------------------------------------------------- | ----------- | --------- | -------------------------------------------------- |
+| PIGBOT_TOKEN                                       |             | str       | discord bot api token                              |
+| PIGBOT_MINECRAFT_SERVER_IP                         |             | str       | ip of the minecraft server                         |
+| PIGBOT_MINECRAFT_SERVER_PORT                       | 25565       | int       | port of the minecraft server                       |
+| PIGBOT_DISCORD_CHANNELS                            |             | List[str] | channel ids to post messages too within the server |
+| PIGBOT_FAILED_QUERY_LIMIT                          | 3           | int       | number of failed queries before notifying admin    |
+| PIGBOT_MINECRAFT_ADMIN_UNAME                       |             | str       | admin dev username (copied as id from discord)     |
+| PIGBOT_LOG_FAILED_QUERIES                          | False       | bool      | log failed queries to chat                         |
+| PIGBOT_MINECRAFT_ENABLE                            | True        | bool      | enable minecraft api                               |
+| PIGBOT_MINECRAFT_ONLINE_CHECK_ENABLE               | True        | bool      | enable checks for the server being online          |
+| PIGBOT_MINECRAFT_LOCAL_SERVER_IP_DETECTION_ENABLED | False       | bool      | enable auto-detection of ip changes for the server |
+| DALLE_ENABLE                                       | True        | bool      | enable dalle-ays api                               |
+| PIGBOT_DALLE_IP                                    | "localhost" | str       | ip of dalle-ays server                             |
+| PIGBOT_DALLE_PORT                                  | int         | 8000      | port of dalle-ays                                  |
 
 # Development
 
