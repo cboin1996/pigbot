@@ -3,6 +3,9 @@ from discord import Embed, File
 import datetime
 from typing import List, Optional
 import logging
+from discord.commands.context import ApplicationContext
+from discord.types.threads import Thread
+from typing import Union
 
 logger = logging.getLogger(__name__)
 """Common tools for use across the apis
@@ -40,11 +43,13 @@ async def has_ip_changed(bot, last_ip: str, channels: List[str]) -> bool:
             return None
 
 
-async def send_not_httpok_msg(ctx, endpoint, response):
+async def send_not_httpok_msg(
+    ctx_or_thread: Union[ApplicationContext, Thread], endpoint, response
+):
     logger.exception(
         f"Error from server at {endpoint}. \n Code={response.status}, \n Body={await response.json()}"
     )
-    return await ctx.send(
+    return await ctx_or_thread.send(
         embed=Embed(
             title=f"Error from server at {endpoint}",
             description=f"Code={response.status}, \nBody={await response.json()}",
@@ -52,9 +57,11 @@ async def send_not_httpok_msg(ctx, endpoint, response):
     )
 
 
-async def send_generic_error_msg(ctx, endpoint: str, e: Exception()):
+async def send_generic_error_msg(
+    ctx_or_thread: Union[ApplicationContext, Thread], endpoint: str, e: Exception()
+):
     logger.exception(f"Error performing request against endpoint {endpoint}: {e}")
-    return await ctx.send(
+    return await ctx_or_thread.send(
         embed=Embed(
             title=f"Error from server at {endpoint}",
             description=f"Exception occurred: {e}",
@@ -96,7 +103,9 @@ async def send_not_httpok_msg_to_channels(
         )
 
 
-async def send_chunked_messaged(ctx, title: str, long_str: str, limit: int):
+async def send_chunked_messaged(
+    ctx: Union[ApplicationContext, Thread], title: str, long_str: str, limit: int
+):
     """Send a long message in multiple embeds
 
     Args:
@@ -127,3 +136,26 @@ async def message_to_channels(
         for channel_id in channel_ids:
             channel = bot.get_channel(int(channel_id))
             await channel.send(embed=Embed(title=msg, description=description))
+
+
+async def get_context_or_thread_for_message(
+    ctx: ApplicationContext,
+    thread_name: Optional[str] = "",
+    archive_duration: int = 1440,
+) -> Union[ApplicationContext, Thread]:
+    """Given the app context, generate a thread if possible and return the thread or app context.
+
+    Args:
+        ctx (ApplicationContext): _description_
+        thread_name: Optional[str]:
+        archive_duration: int archive duration for discord one of 1440, 60, 4320, 10080
+    Returns:
+        Union[ApplicationContext, Thread]: _description_
+    """
+    thread_name = ctx.message.content if thread_name == "" else thread_name
+    if ctx.guild is not None:
+        return await ctx.message.create_thread(
+            name=thread_name, auto_archive_duration=archive_duration
+        )
+    else:
+        return ctx
