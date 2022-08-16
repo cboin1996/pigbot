@@ -1,5 +1,5 @@
-discord==1.7.3
+py-cord==2.0.0b5
 pydantic==1.9.0
 python-dotenv==0.19.2
-mcstatus==8.0.0
+mcstatus==9.3.0
 requests==2.28.1

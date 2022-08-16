@@ -1,6 +1,7 @@
 import datetime
 import logging
 from discord.ext import commands
+from discord import Intents
 from api.messaging import Common
 from api.minecraft import Minecraft
 from api.dalle import Dalle
@@ -16,7 +17,9 @@ def main():
     )
     logger.info("Starting up Pigbot!")
     pigbot_config = config.loader()
-    bot = commands.Bot(command_prefix="$")
+    intents = Intents.default()
+    intents.message_content = True
+    bot = commands.Bot(command_prefix="$", intents=intents)
     bot.add_cog(Common(bot))
     if pigbot_config.pigbot_minecraft_enable:
         bot.add_cog(
