@@ -71,18 +71,21 @@ class QueryDalleBody(BaseModel):
 class ImagePathResponse(BaseModel):
     prompts: Dict[str, List[str]] = {}
 
+
 class ImageSearchResponse(BaseModel):
     images: List[str] = []
 
+
 class ImageSearchParams:
-    """Implemented as a custom class since aiohttp is strict on query parameter formatting.
-    """
+    """Implemented as a custom class since aiohttp is strict on query parameter formatting."""
+
     search_param: str
     starts_with: str
 
     def __init__(self, search_param: str, starts_with: str):
-        self.search_param=search_param
-        self.starts_with = str(starts_with).lower() # aiohttp wants str bools.
+        self.search_param = search_param
+        self.starts_with = str(starts_with).lower()  # aiohttp wants str bools.
+
 
 class Dalle(commands.Cog):
     def __init__(
@@ -200,7 +203,9 @@ class Dalle(commands.Cog):
         embed.set_image(url=f"attachment://{image_name}")
         await ctx.send(file=File(data, filename=image_name), embed=embed)
 
-    @commands.command(brief='use: $dalle_images -s "content" -n {1..5} -display -startwith')
+    @commands.command(
+        brief='use: $dalle_images -s "content" -n {1..5} -display -startwith'
+    )
     async def dalle_images(self, ctx, *, arg):
         default_num_matches = 3
         # parse arguments from the user
@@ -235,7 +240,11 @@ class Dalle(commands.Cog):
         )
         try:
             parsed_args = parser.parse_args(shlex.split(arg))
-            num_matches = parsed_args.num_matches if parsed_args.num_matches is not None else default_num_matches
+            num_matches = (
+                parsed_args.num_matches
+                if parsed_args.num_matches is not None
+                else default_num_matches
+            )
         except ArgumentError as e:
             embed = Embed(
                 title="You are using the cli incorrectly.", description=e.message
@@ -251,8 +260,12 @@ class Dalle(commands.Cog):
             )
             return
         # get image list based on search cli
-        image_search_object = await self.get_image_list(ctx_or_thread,
-            query_params=ImageSearchParams(search_param=parsed_args.query, starts_with=parsed_args.startswith))
+        image_search_object = await self.get_image_list(
+            ctx_or_thread,
+            query_params=ImageSearchParams(
+                search_param=parsed_args.query, starts_with=parsed_args.startswith
+            ),
+        )
         # display images
         if parsed_args.display:
             for i, image_path in enumerate(image_search_object.images):
@@ -266,7 +279,7 @@ class Dalle(commands.Cog):
                 await ctx_or_thread.send(
                     file=File(data, filename=image_name), embed=embed
                 )
-        else: # display text
+        else:  # display text
             # we are limited to 4000 characters in embed description, so we will
             # break it up here
             await send_chunked_messaged(
@@ -388,13 +401,14 @@ class Dalle(commands.Cog):
             await send_generic_error_msg(ctx_or_thread, endpoint, e)
 
     async def get_image_list(
-        self, ctx_or_thread: Union[ApplicationContext, Thread],
-        query_params: ImageSearchParams
+        self,
+        ctx_or_thread: Union[ApplicationContext, Thread],
+        query_params: ImageSearchParams,
     ) -> ImageSearchResponse:
         """Helper for listing images"""
         endpoint = f"{self.url}" + "/images"
         try:
-            json_query_params=query_params.__dict__
+            json_query_params = query_params.__dict__
             print(json_query_params)
             async with aiohttp.ClientSession() as session:
                 async with session.get(endpoint, params=json_query_params) as response:
