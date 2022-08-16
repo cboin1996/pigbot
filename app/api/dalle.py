@@ -71,6 +71,18 @@ class QueryDalleBody(BaseModel):
 class ImagePathResponse(BaseModel):
     prompts: Dict[str, List[str]] = {}
 
+class ImageSearchResponse(BaseModel):
+    images: List[str] = []
+
+class ImageSearchParams:
+    """Implemented as a custom class since aiohttp is strict on query parameter formatting.
+    """
+    search_param: str
+    starts_with: str
+
+    def __init__(self, search_param: str, starts_with: str):
+        self.search_param=search_param
+        self.starts_with = str(starts_with).lower() # aiohttp wants str bools.
 
 class Dalle(commands.Cog):
     def __init__(
@@ -127,6 +139,9 @@ class Dalle(commands.Cog):
             await ctx_or_thread.send(embed=embed)
             return
         except SystemExit:  # we dont want to exit
+            ctx_or_thread = await get_context_or_thread_for_message(
+                ctx, thread_name=ctx.message.content
+            )
             await ctx_or_thread.send(
                 embed=Embed(
                     title=f"You are using this cli option incorrectly",
@@ -185,20 +200,81 @@ class Dalle(commands.Cog):
         embed.set_image(url=f"attachment://{image_name}")
         await ctx.send(file=File(data, filename=image_name), embed=embed)
 
-    @commands.command(brief="tell dalle-ays to show the images on disk")
-    async def dalle_images(self, ctx):
+    @commands.command(brief='use: $dalle_images -s "content" -n {1..5} -display -startwith')
+    async def dalle_images(self, ctx, *, arg):
+        default_num_matches = 3
+        # parse arguments from the user
+        parser = ArgumentParser()
+        parser.add_argument(
+            "-s",
+            dest="query",
+            help="a substr in the image",
+            type=str,
+        )
+        parser.add_argument(
+            "-n",
+            dest="num_matches",
+            help="number of matches (only enforced for displaying images)",
+            type=int,
+            choices=range(1, 6),
+        )
+        parser.add_argument(
+            "-startswith",
+            dest="startswith",
+            action="store_true",
+            help="include this to do a starts-with search.",
+        )
+        parser.add_argument(
+            "-display",
+            dest="display",
+            action="store_true",
+            help="if true, displays the images otherwise returns paths",
+        )
         ctx_or_thread = await get_context_or_thread_for_message(
-            ctx, archive_duration=60
+            ctx, thread_name=ctx.message.content, archive_duration=60
         )
-        lyst = await self.get_image_list(ctx_or_thread)
-        # we are limited to 4000 characters in embed description, so we will
-        # break it up here
-        await send_chunked_messaged(
-            ctx_or_thread,
-            "Here the images on disk for dalle-ays: ",
-            "\n".join(lyst),
-            4000,
-        )
+        try:
+            parsed_args = parser.parse_args(shlex.split(arg))
+            num_matches = parsed_args.num_matches if parsed_args.num_matches is not None else default_num_matches
+        except ArgumentError as e:
+            embed = Embed(
+                title="You are using the cli incorrectly.", description=e.message
+            )
+            await ctx_or_thread.send(embed=embed)
+            return
+        except SystemExit:  # we dont want to exit
+            await ctx_or_thread.send(
+                embed=Embed(
+                    title=f"You are using this cli option incorrectly",
+                    description=f"{parser.format_help().replace('main.py', '$dalle_images')}",
+                )
+            )
+            return
+        # get image list based on search cli
+        image_search_object = await self.get_image_list(ctx_or_thread,
+            query_params=ImageSearchParams(search_param=parsed_args.query, starts_with=parsed_args.startswith))
+        # display images
+        if parsed_args.display:
+            for i, image_path in enumerate(image_search_object.images):
+                if i >= num_matches:
+                    return
+
+                data = await self.get_image(ctx, image_path)
+                image_name = os.path.basename(image_path)
+                embed = Embed(title=image_name, description=image_path)
+                embed.set_image(url=f"attachment://{image_name}")
+                await ctx_or_thread.send(
+                    file=File(data, filename=image_name), embed=embed
+                )
+        else: # display text
+            # we are limited to 4000 characters in embed description, so we will
+            # break it up here
+            await send_chunked_messaged(
+                ctx_or_thread,
+                "Here the images on disk for dalle-ays: ",
+                "\n".join(image_search_object.images),
+                4000,
+            )
 
     @commands.command(brief="tell dalle to pull a model")
     async def dalle_pull(self, ctx):
@@ -312,19 +388,22 @@ class Dalle(commands.Cog):
             await send_generic_error_msg(ctx_or_thread, endpoint, e)
 
     async def get_image_list(
-        self, ctx_or_thread: Union[ApplicationContext, Thread]
-    ) -> List[str]:
+        self, ctx_or_thread: Union[ApplicationContext, Thread],
+        query_params: ImageSearchParams
+    ) -> ImageSearchResponse:
         """Helper for listing images"""
         endpoint = f"{self.url}" + "/images"
         try:
+            json_query_params=query_params.__dict__
+            print(json_query_params)
             async with aiohttp.ClientSession() as session:
-                async with session.get(endpoint) as response:
+                async with session.get(endpoint, params=json_query_params) as response:
                     if response.status != 200:
                         return await send_not_httpok_msg(
                             ctx_or_thread, endpoint, response
                         )
 
-                    return await response.json()
+                    return ImageSearchResponse.parse_obj(await response.json())
         except Exception as e:
             await send_generic_error_msg(ctx_or_thread, endpoint, e)
 
