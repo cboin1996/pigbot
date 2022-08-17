@@ -8,6 +8,8 @@ from models import config
 import asyncio
 from .common import has_ip_changed, message_to_channels
 
+from discord import slash_command
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,8 +36,8 @@ class Minecraft(commands.Cog):
         self.last_known_ip_lock = asyncio.Lock()
         self.minecraft_server_lock = asyncio.Lock()
 
-    @commands.command(brief="prints the status of the minecraft server")
-    async def print_status(self, ctx):
+    @slash_command(description="prints the status of the minecraft server")
+    async def minecraft_print_status(self, ctx):
         try:
             status = await self.server.async_status()
             if status.players.sample:
@@ -57,7 +59,7 @@ class Minecraft(commands.Cog):
                 ]
             )
 
-            await ctx.send(
+            await ctx.respond(
                 embed=Embed(
                     title=title,
                     description=response,
@@ -70,10 +72,10 @@ class Minecraft(commands.Cog):
             msg = f"Received exception trying print_status for server @ ip {self.ip}! "
             description = f"Exception: '{e}'"
             logger.exception(msg + description)
-            await ctx.send(embed=Embed(title=msg, description=description))
+            await ctx.respond(embed=Embed(title=msg, description=description))
 
-    @commands.command(brief="prints whos online playing minecraft.")
-    async def online(self, ctx):
+    @slash_command(description="prints whos online playing minecraft.")
+    async def minecraft_online(self, ctx):
         query = await self.query_server(ctx)
         if query is not None:
             if len(query.players.names) == 0:
@@ -82,7 +84,7 @@ class Minecraft(commands.Cog):
             else:
                 title = (f"The server has the following players online!",)
                 description = "\n\t-".join(query.players.names)
-            await ctx.send(embed=Embed(title=title, description=description))
+            await ctx.respond(embed=Embed(title=title, description=description))
 
     @tasks.loop(seconds=10)
     async def ip_change_checker(self):

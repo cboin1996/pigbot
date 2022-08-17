@@ -19,7 +19,7 @@ def main():
     pigbot_config = config.loader()
     intents = Intents.default()
     intents.message_content = True
-    bot = commands.Bot(command_prefix="$", intents=intents)
+    bot = commands.Bot(intents=intents)
     bot.add_cog(Common(bot))
     if pigbot_config.pigbot_minecraft_enable:
         bot.add_cog(
