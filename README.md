@@ -22,7 +22,8 @@ Note any env vars with a `None` default value are needed to run the server.
 | PIGBOT_MINECRAFT_LOCAL_SERVER_IP_DETECTION_ENABLED | False       | bool      | enable auto-detection of ip changes for the server |
 | DALLE_ENABLE                                       | True        | bool      | enable dalle-ays api                               |
 | PIGBOT_DALLE_IP                                    | "localhost" | str       | ip of dalle-ays server                             |
-| PIGBOT_DALLE_PORT                                  | int         | 8000      | port of dalle-ays                                  |
+| PIGBOT_DALLE_PORT                                  | 8000        | int       | port of dalle-ays                                  |
+| PIGBOT_DALLE_MAX_NUMBER_OF_IMAGES                  | 2           | int       | number of images to return by default for dalle    |
 
 # Development
 
@@ -98,3 +99,21 @@ Lint:
 ```
 task lint
 ```
+
+## Configuring a custom bot with permissions
+In discord developer portal, set the following under Oauth2 generator
+
+- Scope
+  - bot
+  - applications.commands
+- Bot Permissions
+  - Read Messages/View Channels
+  - Send Messages
+  - Send Messages in Threads
+  - Embed Links
+  - Attach Files
+  - Read Message History
+  - Mention Everyone
+  - Use Slash Commands
+  - Connect
+  - Speak

@@ -6,6 +6,7 @@ import logging
 from discord.commands.context import ApplicationContext
 from discord.types.threads import Thread
 from typing import Union
+from discord.interactions import InteractionMessage
 
 logger = logging.getLogger(__name__)
 """Common tools for use across the apis
@@ -46,13 +47,24 @@ async def has_ip_changed(bot, last_ip: str, channels: List[str]) -> bool:
 async def send_not_httpok_msg(
     ctx_or_thread: Union[ApplicationContext, Thread], endpoint, response
 ):
+    try:
+        response_json = await response.json()
+        title = f"Error from server at {endpoint}"
+        description = f"Url = {response.url}, \nCode={response.status}, \nBody={await response.json()}"
+
+    except:
+        title = (
+            "Bad response from server. Here my best shot at interpreting the response:"
+        )
+        description = f"Url = {response.url}, Code={response.status}, \nBody={await response.read()}"
+
     logger.exception(
-        f"Error from server at {endpoint}. \n Code={response.status}, \n Body={await response.json()}"
+        f"Error from server at {endpoint}. \n Code={response.status}, \n Body={title} \n{description}"
     )
     return await ctx_or_thread.send(
         embed=Embed(
-            title=f"Error from server at {endpoint}",
-            description=f"Code={response.status}, \nBody={await response.json()}",
+            title=title,
+            description=description,
         )
     )
 
@@ -116,11 +128,11 @@ async def send_chunked_messaged(
     idx = 0
     chunked_msgs = [long_str[i : i + limit] for i in range(0, len(long_str), limit)]
     for i, msg in enumerate(chunked_msgs):
-        await ctx.send(
-            embed=Embed(
-                title=title + f" part {i+1} of {len(chunked_msgs)}", description=msg
-            )
-        )
+        response = title + f" part {i+1} of {len(chunked_msgs)}"
+        if type(ctx) == ApplicationContext:
+            await ctx.respond(embed=Embed(title=response, description=msg))
+        else:
+            await ctx.send(embed=Embed(title=response, description=msg))
 
 
 async def message_to_channels(
@@ -142,6 +154,7 @@ async def get_context_or_thread_for_message(
     ctx: ApplicationContext,
     thread_name: Optional[str] = "",
     archive_duration: int = 1440,
+    i_message: InteractionMessage = None,
 ) -> Union[ApplicationContext, Thread]:
     """Given the app context, generate a thread if possible and return the thread or app context.
 
@@ -149,13 +162,28 @@ async def get_context_or_thread_for_message(
         ctx (ApplicationContext): _description_
         thread_name: Optional[str]:
         archive_duration: int archive duration for discord one of 1440, 60, 4320, 10080
+        message Optional[InteractionMessage] the message from an interaction (useful if using slashcommands and creating threads in response)
     Returns:
         Union[ApplicationContext, Thread]: _description_
     """
-    thread_name = ctx.message.content if thread_name == "" else thread_name
-    if ctx.guild is not None:
+    # If no guild, user is direct messaging the bot. As such, no thread will be created
+    if ctx.guild is None:
+        return ctx
+
+    # detect if a message was passed,
+    if ctx.message is not None:
+        thread_name = ctx.message.content if thread_name == "" else thread_name
         return await ctx.message.create_thread(
             name=thread_name, auto_archive_duration=archive_duration
         )
-    else:
-        return ctx
+    if i_message is not None:
+        thread_name = i_message.content if thread_name == "" else thread_name
+        # otherwise, assume slash_command was used.
+        return await i_message.create_thread(
+            name=thread_name, auto_archive_duration=archive_duration
+        )
+    msg = "Could not determine whether ctx or thread is appropriate based on inputs:"
+    msg += f"\nctx: {ctx},\nthread_name:{thread_name}\narchive_duration:{archive_duration},\ni_message:{i_message}"
+    raise ValueError(
+        "Could not determine whether ctx or thread is appropriate based on inputs:"
+    )

@@ -15,6 +15,7 @@ import aiohttp
 import os
 from discord.commands.context import ApplicationContext
 from discord.types.threads import Thread
+from discord import slash_command, option
 from .common import (
     get_ip,
     send_chunked_messaged,
@@ -95,68 +96,64 @@ class Dalle(commands.Cog):
         self.ip = ip
         self.port = port
         self.url = f"http://{self.ip}:{self.port}/dalle"
+        self.config = config
 
-    @commands.command(
-        brief="ask dalle to create something: -q phrase1 -n num_pics",
+    @slash_command(
+        description="The main inference command for generating images from dalle given a query",
     )
-    async def dalle_see(self, ctx, *, arg):
-        # parse arguments from the user
-        parser = ArgumentParser()
-        parser.add_argument(
-            "-q",
-            dest="queries",
-            action="append",
-            help="input up to n queries for dalle. Ex. -q swag -q yolo",
-        )
-        parser.add_argument(
-            "-n",
-            dest="number_of_images",
-            help="number of images to produce for each query",
-            type=int,
-            choices=range(1, 5),
-        )
-        parser.add_argument(
-            "-dalle_sha",
-            dest="dalle_sha",
-            help="commit sha for the dalle-mini model (if none, uses dalle-ays defaults)",
-            type=str,
-            default="",
-        )
-        parser.add_argument(
-            "-vqgan_sha",
-            dest="vqgan_sha",
-            help="commit sha for the vqgan model (if none, uses dalle-ays defaults)",
-            type=str,
-            default="",
-        )
+    @option("query", description="what to generate the images from", type=str)
+    @option(
+        "number_of_images",
+        description="the number of images to generate",
+        required=False,
+        type=int,
+        default=2,
+    )
+    @option(
+        "dalle_sha",
+        description="the dalle-mini model sha",
+        required=False,
+        type=str,
+        default="",
+    )
+    @option(
+        "vqgan_sha", description="vqgan model sha", required=False, type=str, default=""
+    )
+    async def dalle_see(
+        self,
+        ctx,
+        query: str,
+        number_of_images: int = 2,
+        dalle_sha: str = "",
+        vqgan_sha: str = "",
+    ):
+        """The main inference command for generating images from dalle given a query
 
-        try:
-            parsed_args = parser.parse_args(shlex.split(arg))
-            ctx_or_thread = await get_context_or_thread_for_message(
-                ctx, thread_name=str(parsed_args.queries)
-            )
-        except ArgumentError as e:
-            embed = Embed(
-                title="You are using the cli incorrectly.", description=e.message
-            )
-            await ctx_or_thread.send(embed=embed)
-            return
-        except SystemExit:  # we dont want to exit
-            ctx_or_thread = await get_context_or_thread_for_message(
-                ctx, thread_name=ctx.message.content
-            )
+        Args:
+            ctx (_type_): _description_
+            query (str): the query to generate the image from
+            number_of_images (int, optional): the number of images to generate. Defaults to 2.
+            dalle_sha (str, optional): the dalle-mini sha to use for inference. Defaults to "".
+            vqgan_sha (str, optional): the vqgan sha to use for inference. Defaults to "".
+        """
+        cm = ctx.command
+        interaction = await ctx.respond(f"Received {ctx.command.name}")
+        queries = [query]
+        ctx_or_thread = await get_context_or_thread_for_message(
+            ctx,
+            thread_name=str(queries),
+            i_message=await interaction.original_message(),
+        )
+        if number_of_images > self.config.pigbot_dalle_max_number_of_images:
             await ctx_or_thread.send(
                 embed=Embed(
-                    title=f"You are using this cli option incorrectly",
-                    description=f"{parser.format_help().replace('main.py', '$dalle_see')}",
+                    title=f"Invalid argument!",
+                    description=f"number_of_images={number_of_images} must be within [0,{self.config.pigbot_dalle_max_number_of_images}]!",
                 )
             )
             return
-
         # obtain model paths from server
-        model_paths = await self.get_dalle_browse(
-            ctx_or_thread, parsed_args.dalle_sha, parsed_args.vqgan_sha
-        )
+        model_paths = await self.get_dalle_browse(ctx_or_thread, dalle_sha, vqgan_sha)
 
         if model_paths is None:
             return
@@ -171,15 +168,15 @@ class Dalle(commands.Cog):
 
         message = await ctx_or_thread.send(
             embed=Embed(
-                title=f"Submitting query to dalle-ays: {parsed_args.queries}",
+                title=f"Submitting query to dalle-ays: {queries}",
                 description=f"Using models: {model_paths}",
             )
         )
         image_paths_obj = await self.post_model_show(
             ctx_or_thread,
             model_paths,
-            parsed_args.queries,
-            parsed_args.number_of_images,
+            queries,
+            number_of_images,
         )
         if image_paths_obj is None:
             return
@@ -195,79 +192,91 @@ class Dalle(commands.Cog):
                     file=File(data, filename=image_name), embed=embed
                 )
 
-    @commands.command(brief="tell dalle-ays to display an image")
-    async def dalle_image(self, ctx, *, image_path: str):
+    @slash_command(description="tell dalle-ays to display an image")
+    @option("image_path", description="path to the image you want to see", type=str)
+    async def dalle_image(self, ctx, image_path: str):
+        """Show a image given a path.
+
+        Args:
+            image_path (str): the path to the image on the backends disk
+        """
+        await ctx.respond(f"Received {ctx.command.name}")
         data = await self.get_image(ctx, image_path)
+        if data is None:
+            return
         image_name = os.path.basename(image_path)
         embed = Embed(title=image_name)
         embed.set_image(url=f"attachment://{image_name}")
         await ctx.send(file=File(data, filename=image_name), embed=embed)
 
-    @commands.command(
-        brief='use: $dalle_images -s "content" -n {1..5} -display -startwith'
+    @slash_command(description="search up some images on disk!")
+    @option(
+        "query",
+        description="the keyword you want to find images matching",
+        required=False,
+        type=str,
+        default="",
     )
-    async def dalle_images(self, ctx, *, arg):
-        default_num_matches = 3
-        # parse arguments from the user
-        parser = ArgumentParser()
-        parser.add_argument(
-            "-s",
-            dest="query",
-            help="a substr in the image",
-            type=str,
-        )
-        parser.add_argument(
-            "-n",
-            dest="num_matches",
-            help="number of matches (only enforced for displaying images)",
-            type=int,
-            choices=range(1, 6),
-        )
-        parser.add_argument(
-            "-startswith",
-            dest="startswith",
-            action="store_true",
-            help="include this to do a starts-with search.",
-        )
-        parser.add_argument(
-            "-display",
-            dest="display",
-            action="store_true",
-            help="if true, displays the images otherwise returns paths",
-        )
+    @option(
+        "display",
+        description="Choosing True displays images, False displays image paths",
+        required=False,
+        type=bool,
+        default=True,
+    )
+    @option(
+        "startswith",
+        description="Choosing True searchs from the start of image names, False searches anywhere.",
+        required=False,
+        type=bool,
+        default=False,
+    )
+    @option(
+        "num_matches",
+        description="The number of images to return",
+        required=False,
+        type=int,
+        default=2,
+    )
+    async def dalle_images(
+        self,
+        ctx,
+        query: str = "",
+        display: bool = True,
+        startswith: bool = False,
+        num_matches: int = 3,
+    ):
+        """search for images on disk
+
+        Args:
+            query (str, optional): Image name to search for. Defaults to "".
+            display (bool, optional): Whether to display images or image paths. Defaults to True.
+            startswith (bool, optional): True conducts a startswith search, false matches substrings. Defaults to False.
+            num_matches (int, optional): The number of search matches to return. Defaults to 3.
+        """
+        dkds = ctx
+        interaction = await ctx.respond(f"Received {ctx.command.name}")
         ctx_or_thread = await get_context_or_thread_for_message(
-            ctx, thread_name=ctx.message.content, archive_duration=60
+            ctx,
+            thread_name=f"{ctx.command.name}: {query}",
+            archive_duration=60,
+            i_message=await interaction.original_message(),
         )
-        try:
-            parsed_args = parser.parse_args(shlex.split(arg))
-            num_matches = (
-                parsed_args.num_matches
-                if parsed_args.num_matches is not None
-                else default_num_matches
+
+        if num_matches > 3 or num_matches <= 0:
+            ctx_or_thread.send(
+                "The allowed number of image matches falls within [1,3]!"
             )
-        except ArgumentError as e:
-            embed = Embed(
-                title="You are using the cli incorrectly.", description=e.message
-            )
-            await ctx_or_thread.send(embed=embed)
-            return
-        except SystemExit:  # we dont want to exit
-            await ctx_or_thread.send(
-                embed=Embed(
-                    title=f"You are using this cli option incorrectly",
-                    description=f"{parser.format_help().replace('main.py', '$dalle_images')}",
-                )
-            )
-            return
+
         # get image list based on search cli
         image_search_object = await self.get_image_list(
             ctx_or_thread,
-            query_params=ImageSearchParams(
-                search_param=parsed_args.query, starts_with=parsed_args.startswith
-            ),
+            query_params=ImageSearchParams(search_param=query, starts_with=startswith),
         )
+        if image_search_object is None:
+            return
         # display images
-        if parsed_args.display:
+        if display:
             for i, image_path in enumerate(image_search_object.images):
                 if i >= num_matches:
                     return
@@ -289,9 +298,25 @@ class Dalle(commands.Cog):
                 4000,
             )
 
-    @commands.command(brief="tell dalle to pull a model")
-    async def dalle_pull(self, ctx):
-        await ctx.send(embed=Embed(title="Pull initiated!"))
+    @slash_command(description="tell dalle to pull a model")
+    @option(
+        "dalle_sha",
+        description="the dalle-mini model sha",
+        required=False,
+        type=str,
+        default="",
+    )
+    @option(
+        "vqgan_sha", description="vqgan model sha", required=False, type=str, default=""
+    )
+    async def dalle_pull(self, ctx, dalle_sha: str = "", vqgan: str = ""):
+        """Pulls models to disk
+
+        Args:
+            dalle_sha (str, optional): The dalle-mini model sha to pull. Defaults to "".
+            vqgan (str, optional): the jax vqgan sha to pull. Defaults to "".
+        """
+        await ctx.respond(f"Received {ctx.command.name}")
         model_paths = await self.get_pull(ctx)
         if model_paths is None:
             return
@@ -303,13 +328,30 @@ class Dalle(commands.Cog):
                 4000,
             )
 
-    @commands.command(brief="see whats under the hood!")
-    async def dalle_browse(self, ctx):
-        model_paths = await self.get_dalle_browse(ctx)
+    @slash_command(description="Check to see if a model exists on disk!")
+    @option(
+        "dalle_sha",
+        description="the dalle-mini model sha",
+        required=False,
+        type=str,
+        default="",
+    )
+    @option(
+        "vqgan_sha", description="vqgan model sha", required=False, type=str, default=""
+    )
+    async def dalle_browse(self, ctx, dalle_sha: str = "", vqgan_sha: str = ""):
+        """Browse the current model that the backend is using.
+
+        Args:
+            dalle_sha (str, optional): The dalle-mini sha to check for. Defaults to "".
+            vqgan_sha (str, optional): The vqgan sha to check for. Defaults to "".
+        """
+        await ctx.respond(f"Received {ctx.command.name}")
+        model_paths = await self.get_dalle_browse(ctx, dalle_sha, vqgan_sha)
         if model_paths is None:
             return
         elif not model_paths:
-            await ctx.send(
+            await ctx.respond(
                 embed=Embed(
                     title=f"Looks like theres no models downloaded yet! Try using $pull to get the latest!"
                 )
@@ -336,15 +378,14 @@ class Dalle(commands.Cog):
         model_paths = None
         endpoint = self.url + "/browse"
         query_params = None
-        if dalle_sha != "" and vqgan != "":
+        if dalle_sha != "" or vqgan_sha != "":
             query_params = {"dalle_sha": dalle_sha, "vqgan_sha": vqgan_sha}
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(endpoint, params=query_params) as response:
                     if response.status != 200:
-                        return await send_not_httpok_msg(
-                            ctx_or_thread, endpoint, response
-                        )
+                        await send_not_httpok_msg(ctx_or_thread, endpoint, response)
+                        return
 
                     return ModelPaths.parse_obj(await response.json())
         except Exception as e:
@@ -373,9 +414,8 @@ class Dalle(commands.Cog):
             async with aiohttp.ClientSession() as session:
                 async with session.post(endpoint, json=payload.dict()) as response:
                     if response.status != 200:
-                        return await send_not_httpok_msg(
-                            ctx_or_thread, endpoint, response
-                        )
+                        await send_not_httpok_msg(ctx_or_thread, endpoint, response)
+                        return
                     else:
                         return ImagePathResponse.parse_obj(await response.json())
 
@@ -391,9 +431,8 @@ class Dalle(commands.Cog):
             async with aiohttp.ClientSession() as session:
                 async with session.get(endpoint) as response:
                     if response.status != 200:
-                        return await send_not_httpok_msg(
-                            ctx_or_thread, endpoint, response
-                        )
+                        await send_not_httpok_msg(ctx_or_thread, endpoint, response)
+                        return
 
                     return ModelPaths.parse_obj(await response.json())
 
@@ -404,18 +443,16 @@ class Dalle(commands.Cog):
         self,
         ctx_or_thread: Union[ApplicationContext, Thread],
         query_params: ImageSearchParams,
-    ) -> ImageSearchResponse:
+    ) -> Optional[ImageSearchResponse]:
         """Helper for listing images"""
         endpoint = f"{self.url}" + "/images"
         try:
             json_query_params = query_params.__dict__
-            print(json_query_params)
             async with aiohttp.ClientSession() as session:
                 async with session.get(endpoint, params=json_query_params) as response:
                     if response.status != 200:
-                        return await send_not_httpok_msg(
-                            ctx_or_thread, endpoint, response
-                        )
+                        await send_not_httpok_msg(ctx_or_thread, endpoint, response)
+                        return
 
                     return ImageSearchResponse.parse_obj(await response.json())
         except Exception as e:
@@ -423,12 +460,13 @@ class Dalle(commands.Cog):
 
     async def get_image(
         self, ctx_or_thread: Union[ApplicationContext, Thread], image_path: str
-    ) -> io.BytesIO:
+    ) -> Optional[io.BytesIO]:
         """Helper for getting an image"""
         endpoint = f"{self.url}" + f"/image?image_path={image_path}"
         async with aiohttp.ClientSession() as session:
             async with session.get(endpoint) as response:
                 if response.status != 200:
-                    return await send_not_httpok_msg(ctx_or_thread, endpoint, response)
+                    await send_not_httpok_msg(ctx_or_thread, endpoint, response)
+                    return
                 data = io.BytesIO(await response.read())
                 return data

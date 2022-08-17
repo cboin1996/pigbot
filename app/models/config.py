@@ -24,6 +24,7 @@ class PigBotSettings(BaseSettings):
     pigbot_dalle_ip: str = "localhost"
     pigbot_dalle_port: int = 8000
     pigbot_minecraft_local_server_ip_detection_enabled: bool = False
+    pigbot_dalle_max_number_of_images: int = 2
 
     class Config:
         config_path = os.path.join(os.path.dirname(sys.path[0]), ".env")
