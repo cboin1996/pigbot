@@ -2,6 +2,17 @@
 
 Discord bot playground written in python as practice for docker and python.
 
+# Features
+- Dalle-mini interface compatible with fastAPI dalle server [dalle-ays](https://github.com/cboin1996/dalle-ays)
+  - Image generation via text
+  - Model downloading/loading of any dalle-mini and vqgan models
+  - Image search
+- Minecraft serverstatus updates:
+  - Players joined/left detection
+  - Server status
+  - Automatic IP change detection
+  - Notifications for server downtime
+
 Author: Christian Boin
 
 # Configuration
