@@ -16,6 +16,9 @@ import os
 from discord.commands.context import ApplicationContext
 from discord.types.threads import Thread
 from discord import slash_command, option
+from discord import AutocompleteContext
+import asyncio
+
 from .common import (
     get_ip,
     send_chunked_messaged,
@@ -25,7 +28,6 @@ from .common import (
 )
 
 logger = logging.getLogger(__name__)
-
 
 class ModelPaths(BaseModel):
     """Model for path structure that represents how
@@ -87,6 +89,11 @@ class ImageSearchParams:
         self.search_param = search_param
         self.starts_with = str(starts_with).lower()  # aiohttp wants str bools.
 
+async def get_image_list_autocomplete(ctx: AutocompleteContext):
+    """Callback for image search autocomplete"""
+    async with ctx.cog.images_lock:
+        images = dict(ctx.cog.images)
+    return [image for image in images if ctx.value.lower() in image]
 
 class Dalle(commands.Cog):
     def __init__(
@@ -97,7 +104,9 @@ class Dalle(commands.Cog):
         self.port = port
         self.url = f"http://{self.ip}:{self.port}/dalle"
         self.config = config
-
+        self.images: Dict[str, str] = {} # will store truncated image paths and the matching full path
+        self.images_lock = asyncio.Lock()
+        self.image_list_gatherer.start()
     @slash_command(
         description="The main inference command for generating images from dalle given a query",
     )
@@ -193,7 +202,7 @@ class Dalle(commands.Cog):
                 )
 
     @slash_command(description="tell dalle-ays to display an image")
-    @option("image_path", description="path to the image you want to see", type=str)
+    @option("image_path", description="path to the image you want to see", type=str, autocomplete=get_image_list_autocomplete)
     async def dalle_image(self, ctx, image_path: str):
         """Show a image given a path.
 
@@ -201,6 +210,9 @@ class Dalle(commands.Cog):
             image_path (str): the path to the image on the backends disk
         """
         await ctx.respond(f"Received {ctx.command.name}")
+        async with self.images_lock:
+            if image_path in self.images: # transform truncated paths back to full paths if they exist
+                image_path = self.images[image_path]
         data = await self.get_image(ctx, image_path)
         if data is None:
             return
@@ -215,7 +227,7 @@ class Dalle(commands.Cog):
         description="the keyword you want to find images matching",
         required=False,
         type=str,
-        default="",
+        default=""
     )
     @option(
         "display",
@@ -364,6 +376,29 @@ class Dalle(commands.Cog):
                 4000,
             )
 
+    @tasks.loop(seconds=30)
+    async def image_list_gatherer(self):
+        """Keep image list in memory for more efficient autocomplete search"""
+        endpoint = f"{self.url}" + "/images"
+        try:
+            json_query_params = ImageSearchParams(search_param="", starts_with=False).__dict__
+            async with aiohttp.ClientSession() as session:
+                async with session.get(endpoint, params=json_query_params) as response:
+                    if response.status != 200:
+                        title = f"Error from server at {endpoint}"
+                        description = f"Url = {response.url}, \nCode={response.status}, \nBody={await response.json()}"
+                        logger.exception(
+                            f"Error from server at {endpoint}. \n Code={response.status}, \n Body={title} \n{description}"
+                        )
+                        return
+                    images = ImageSearchResponse.parse_obj(await response.json()).images
+                    images_dict = {image[:100].lower() : image for image in images}
+                    async with self.images_lock:
+                        self.images = images_dict # discord requires truncated list
+
+        except Exception as e:
+            logger.exception(f"Error performing request against endpoint {endpoint}: {e}")
+
     async def get_dalle_browse(
         self,
         ctx_or_thread: Union[ApplicationContext, Thread],
@@ -470,3 +505,5 @@ class Dalle(commands.Cog):
                     return
                 data = io.BytesIO(await response.read())
                 return data
+
+
