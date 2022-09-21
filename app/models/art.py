@@ -58,7 +58,7 @@ WW`----'WW
          \_\  \_\\
 ```"""
 
-    sitting_pig = """
+    sitting_fat_pig = """
 ```
              ._     __,
               |\,../'\\
@@ -86,7 +86,7 @@ WW`----'WW
             PigArt.big_pig,
             PigArt.on_the_fence_pig,
             PigArt.flying_pig,
-            PigArt.sitting_pig,
+            PigArt.sitting_fat_pig,
         ]
 
 
