@@ -1,5 +1,4 @@
 class PigArt:
-
     sitting_pig = """
 ```
   (\____/)  'oink.'
