@@ -3,6 +3,7 @@
 Discord bot playground written in python as practice for docker and python.
 
 # Features
+
 - Dalle-mini interface compatible with fastAPI dalle server [dalle-ays](https://github.com/cboin1996/dalle-ays)
   - Image generation via text
   - Model downloading/loading of any dalle-mini and vqgan models
@@ -99,12 +100,6 @@ Using gpu:
 task dev -w
 ```
 
-Using cpu:
-
-```
-task dev-cpu -w
-```
-
 Lint:
 
 ```
@@ -112,6 +107,7 @@ task lint
 ```
 
 ## Configuring a custom bot with permissions
+
 In discord developer portal, set the following under Oauth2 generator
 
 - Scope
