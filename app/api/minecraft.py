@@ -1,5 +1,5 @@
 from typing import List, Optional
-from mcstatus import MinecraftServer
+from mcstatus import JavaServer
 import sys
 from discord.ext import tasks, commands
 from discord import Embed
@@ -20,7 +20,7 @@ class Minecraft(commands.Cog):
         self.bot = bot
         self.ip = ip + f":{config.pigbot_minecraft_server_port}"
         self.port = config.pigbot_minecraft_server_port
-        self.server = MinecraftServer.lookup(self.ip)
+        self.server = JavaServer.lookup(self.ip)
         self.current_online = set()
         self.last_online = set()
         self.config = config
