@@ -2,7 +2,7 @@
 
 Discord bot playground written in python as practice for docker and python.
 
-# Features
+## Features
 
 - Dalle-mini interface compatible with fastAPI dalle server [dalle-ays](https://github.com/cboin1996/dalle-ays)
   - Image generation via text
@@ -16,7 +16,7 @@ Discord bot playground written in python as practice for docker and python.
 
 Author: Christian Boin
 
-# Configuration
+## Configuration
 
 Note any env vars with a `None` default value are needed to run the server.
 
@@ -25,6 +25,7 @@ Note any env vars with a `None` default value are needed to run the server.
 | PIGBOT_TOKEN                                       |             | str       | discord bot api token                              |
 | PIGBOT_MINECRAFT_SERVER_IP                         |             | str       | ip of the minecraft server                         |
 | PIGBOT_MINECRAFT_SERVER_PORT                       | 25565       | int       | port of the minecraft server                       |
+| PIGBOT_MINECRAFT_RUNNING_ON_SERVER                 | False       | bool      | enable when running pigbot and mc on the same pc   |
 | PIGBOT_DISCORD_CHANNELS                            |             | List[str] | channel ids to post messages too within the server |
 | PIGBOT_FAILED_QUERY_LIMIT                          | 3           | int       | number of failed queries before notifying admin    |
 | PIGBOT_MINECRAFT_ADMIN_UNAME                       |             | str       | admin dev username (copied as id from discord)     |
@@ -37,21 +38,21 @@ Note any env vars with a `None` default value are needed to run the server.
 | PIGBOT_DALLE_PORT                                  | 8000        | int       | port of dalle-ays                                  |
 | PIGBOT_DALLE_MAX_NUMBER_OF_IMAGES                  | 2           | int       | number of images to return by default for dalle    |
 
-# Development
+## Development
 
 Mandatory env vars are required from the configuration section in a .env file!
 
 To kickstart the creation of that file, run
 
-```
+```bash
 task env
 ```
 
-## Locally
+### Locally
 
 Configure vscode debugger for live reload local build (you will need cuda and nvidia drivers):
 
-```
+```bash
 {
   "configurations": [
     {
@@ -69,13 +70,13 @@ Configure vscode debugger for live reload local build (you will need cuda and nv
 
 ```
 
-## Docker
+### Docker
 
 Or, alternatively,
 
 Build the image:
 
-```
+```bash
 task build
 ```
 
@@ -83,30 +84,30 @@ Run:
 
 Using a gpu:
 
-```
+```bash
 task run
 ```
 
 Using cpu only
 
-```
+```bash
 task run-cpu
 ```
 
 Development (live reload docker builds with gpu):
 Using gpu:
 
-```
+```bash
 task dev -w
 ```
 
 Lint:
 
-```
+```bash
 task lint
 ```
 
-## Configuring a custom bot with permissions
+### Configuring a custom bot with permissions
 
 In discord developer portal, set the following under Oauth2 generator
 

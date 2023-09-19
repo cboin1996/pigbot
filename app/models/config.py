@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 import os, sys
 
 
@@ -13,6 +13,9 @@ class PigBotSettings(BaseSettings):
 
     pigbot_token: str
     pigbot_minecraft_server_ip: str
+    # enable this flag if you are running pigbot on the
+    # same server as minecraft.
+    pigbot_minecraft_running_on_server: bool = False
     pigbot_minecraft_server_port: int
     pigbot_discord_channels: List[str]
     pigbot_failed_query_limit: int = 25565

@@ -6,7 +6,7 @@ from discord import Embed
 import logging
 from models import config
 import asyncio
-from .common import has_ip_changed, message_to_channels
+from .common import has_ip_changed, message_to_channels, get_ip
 
 from discord import slash_command
 
@@ -19,6 +19,11 @@ class Minecraft(commands.Cog):
     ) -> None:
         self.bot = bot
         self.ip = ip + f":{config.pigbot_minecraft_server_port}"
+        # initialize external ip
+        external_ip = "Unset at startup."
+        initial_external_ip = get_ip(bot, config.pigbot_discord_channels)
+        if initial_external_ip is not None:
+            self.external_ip =  initial_external_ip
         self.port = config.pigbot_minecraft_server_port
         self.server = JavaServer.lookup(self.ip)
         self.current_online = set()
@@ -93,20 +98,23 @@ class Minecraft(commands.Cog):
         """
         async with self.last_known_ip_lock:
             current_ip = await has_ip_changed(
-                self.bot, self.ip, self.config.pigbot_discord_channels
+                self.bot, self.external_ip, self.config.pigbot_discord_channels
             )
             if current_ip is not None:
                 await message_to_channels(
                     self.bot,
                     self.config.pigbot_discord_channels,
                     f"IP change detected!",
-                    description=f"<@{self.server_admin_uname}> previous ip {self.ip} --> current ip {current_ip}) :)",
+                    description=f"<@{self.server_admin_uname}> previous ip {self.external_ip} --> current ip {current_ip}) :)",
                 )
                 async with self.minecraft_server_lock:
-                    self.ip = current_ip
-                    self.server = await MinecraftServer.async_lookup(
-                        f"{current_ip}:{self.port}"
-                    )
+                    self.external_ip = current_ip
+                    # only update server ref if not running
+                    # pigbot on same server as minecraft server
+                    if not self.config.pigbot_minecraft_running_on_server:
+                        self.server = await MinecraftServer.async_lookup(
+                            f"{current_ip}:{self.port}"
+                        )
 
             else:
                 logger.debug(f"No ip change detected for server with ip: {self.ip}")
