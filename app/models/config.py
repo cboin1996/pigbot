@@ -17,7 +17,7 @@ class PigBotSettings(BaseSettings):
     # same server as minecraft.
     pigbot_minecraft_running_on_server: bool = False
     pigbot_minecraft_server_port: int
-    pigbot_discord_channels: List[str]
+    pigbot_minecraft_channels: List[str]
     pigbot_failed_query_limit: int = 25565
     pigbot_minecraft_admin_uname: str
     pigbot_log_failed_queries: bool = False

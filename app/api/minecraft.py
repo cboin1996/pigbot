@@ -6,7 +6,7 @@ from discord import Embed
 import logging
 from models import config
 import asyncio
-from .common import has_ip_changed, message_to_channels, get_ip
+from .common import has_ip_changed, message_to_channels, get_ip, update_channel_topics
 
 from discord import slash_command
 
@@ -20,10 +20,7 @@ class Minecraft(commands.Cog):
         self.bot = bot
         self.ip = ip + f":{config.pigbot_minecraft_server_port}"
         # initialize external ip
-        external_ip = "Unset at startup."
-        initial_external_ip = get_ip(bot, config.pigbot_discord_channels)
-        if initial_external_ip is not None:
-            self.external_ip = initial_external_ip
+        self.external_ip = "Unset at startup."
         self.port = config.pigbot_minecraft_server_port
         self.server = JavaServer.lookup(self.ip)
         self.current_online = set()
@@ -98,21 +95,26 @@ class Minecraft(commands.Cog):
         """
         async with self.last_known_ip_lock:
             current_ip = await has_ip_changed(
-                self.bot, self.external_ip, self.config.pigbot_discord_channels
+                self.bot, self.external_ip, self.config.pigbot_minecraft_channels
             )
             if current_ip is not None:
                 await message_to_channels(
                     self.bot,
-                    self.config.pigbot_discord_channels,
+                    self.config.pigbot_minecraft_channels,
                     f"IP change detected!",
-                    description=f"<@{self.server_admin_uname}> previous ip {self.external_ip} --> current ip {current_ip}) :)",
+                    description=f"<@{self.server_admin_uname}> previous ip '{self.external_ip}' --> current ip '{current_ip}') :)",
+                )
+                await update_channel_topics(
+                    self.bot,
+                    self.config.pigbot_minecraft_channels,
+                    f"Server IP: {current_ip}:{self.port} Server Map: http://{current_ip}:8167/",
                 )
                 async with self.minecraft_server_lock:
                     self.external_ip = current_ip
                     # only update server ref if not running
                     # pigbot on same server as minecraft server
                     if not self.config.pigbot_minecraft_running_on_server:
-                        self.server = await MinecraftServer.async_lookup(
+                        self.server = await JavaServer.async_lookup(
                             f"{current_ip}:{self.port}"
                         )
 
@@ -132,7 +134,9 @@ class Minecraft(commands.Cog):
     @tasks.loop(seconds=2)
     async def online_checker(self):
         """Check which players are online/offline"""
-        query = await self.query_server(channel_ids=self.config.pigbot_discord_channels)
+        query = await self.query_server(
+            channel_ids=self.config.pigbot_minecraft_channels
+        )
         if query is not None:
             self.current_online = set(query.players.names)
             if self.current_online != self.last_online:
@@ -147,7 +151,7 @@ class Minecraft(commands.Cog):
                 logger.info(msg)
                 await message_to_channels(
                     self.bot,
-                    self.config.pigbot_discord_channels,
+                    self.config.pigbot_minecraft_channels,
                     embed=Embed(title=msg, description=desc),
                 )
 
@@ -166,7 +170,9 @@ class Minecraft(commands.Cog):
     @tasks.loop(seconds=10)
     async def server_online_checker(self):
         """This simply queries the server every ten seconds to confirm it is up."""
-        query = await self.query_server(channel_ids=self.config.pigbot_discord_channels)
+        query = await self.query_server(
+            channel_ids=self.config.pigbot_minecraft_channels
+        )
 
     @server_online_checker.before_loop
     async def before_server_online_checker(self):

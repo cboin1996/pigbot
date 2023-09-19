@@ -150,6 +150,21 @@ async def message_to_channels(
             await channel.send(embed=Embed(title=msg, description=description))
 
 
+async def update_channel_topics(bot, channel_ids: List[Union[str, int]], desc: str):
+    """Updates a channel topic
+
+    Args:
+        bot (any): the discord bot
+        channel_ids (List[str]): the ids of the channels to update
+        desc (str): the topic body
+    """
+    for channel_id in channel_ids:
+        if type(channel_id) == str:
+            channel_id = int(channel_id)
+        channel = bot.get_channel(channel_id)
+        await channel.edit(topic=desc)
+
+
 async def get_context_or_thread_for_message(
     ctx: ApplicationContext,
     thread_name: Optional[str] = "",

@@ -109,12 +109,13 @@ task lint
 
 ### Configuring a custom bot with permissions
 
-In discord developer portal, set the following under Oauth2 generator
+In [discord developer portal](https://discord.com/developers/applications), set the following under Oauth2 generator
 
 - Scope
   - bot
   - applications.commands
 - Bot Permissions
+  - Manage Channels
   - Read Messages/View Channels
   - Send Messages
   - Send Messages in Threads
