@@ -23,7 +23,7 @@ class Minecraft(commands.Cog):
         external_ip = "Unset at startup."
         initial_external_ip = get_ip(bot, config.pigbot_discord_channels)
         if initial_external_ip is not None:
-            self.external_ip =  initial_external_ip
+            self.external_ip = initial_external_ip
         self.port = config.pigbot_minecraft_server_port
         self.server = JavaServer.lookup(self.ip)
         self.current_online = set()
