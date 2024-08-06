@@ -152,7 +152,8 @@ class Minecraft(commands.Cog):
                     self.bot,
                     self.config.pigbot_minecraft_channels,
                     msg=msg,
-                    description=desc)
+                    description=desc,
+                )
 
         self.last_online = self.current_online
 

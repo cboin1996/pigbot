@@ -107,9 +107,9 @@ class Dalle(commands.Cog):
         self.port = port
         self.url = f"http://{self.ip}:{self.port}/dalle"
         self.config = config
-        self.images: Dict[
-            str, str
-        ] = {}  # will store truncated image paths and the matching full path
+        self.images: Dict[str, str] = (
+            {}
+        )  # will store truncated image paths and the matching full path
         self.images_lock = asyncio.Lock()
         self.image_list_gatherer.start()
 
