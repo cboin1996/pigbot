@@ -14,4 +14,4 @@ RUN ./venv/bin/pip install --upgrade pip && ./venv/bin/pip install -r requiremen
 # Run as non-root user:
 RUN useradd --create-home appuser
 USER appuser
-ENTRYPOINT ["./venv/bin/python3", "app/main.py"]
+ENTRYPOINT ["./venv/bin/python3", "main.py"]
