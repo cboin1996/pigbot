@@ -63,7 +63,7 @@ tasks:
   run:
     prefix: run
     cmds:
-      - docker run --rm --name {{.APP_NAME}} -p 443:8443 --env-file $ENV.env -v "${PWD}":/{{.APP_ROOT}} {{.APP_NAME}}:{{.VERSION}} --log-level debug
+      - docker run --rm --name {{.APP_NAME}} -p 443:8443 --env-file .env -v "${PWD}":/{{.APP_ROOT}} {{.APP_NAME}}:{{.VERSION}} --log-level debug
 
   env:
     prefix: env

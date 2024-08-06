@@ -11,6 +11,7 @@ class PigBotSettings(BaseSettings):
         BaseSettings (pydantic.BaseSettings): BaseSettings object from pydantic
     """
 
+    env: str
     pigbot_token: str
     pigbot_minecraft_server_ip: str
     # enable this flag if you are running pigbot on the
@@ -30,16 +31,8 @@ class PigBotSettings(BaseSettings):
     pigbot_dalle_max_number_of_images: int = 4
 
     class Config:
-        config_path = os.path.join(os.path.dirname(sys.path[0]), ".env")
+        config_path = os.path.join(
+            os.path.dirname(sys.path[0]), f"{os.getenv('ENV','')}.env"
+        )
         env_file = config_path
         env_file_encoding = "utf-8"
-
-
-def loader():
-    """Config loader.\n
-    Loading of config is performed first through checking environment,
-    then if nothing is found will look for a .env file.
-    Note: in production, you should be storing secrets in the environment anyways.
-    """
-
-    return PigBotSettings()

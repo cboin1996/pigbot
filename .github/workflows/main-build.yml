@@ -6,7 +6,7 @@ on:
     branches: [main]
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     env:
       DOCKER_REGISTRY: docker.io
       DOCKER_IMAGE: cboin/pigbot
@@ -25,19 +25,17 @@ jobs:
             ref="${GITHUB_REF}"
             tag=$(echo $GITHUB_REF | sed 's/refs\/tags\///g')
           fi
-          echo "::set-output name=tag::$tag"
+          echo "TAG=$tag" >> $GITHUB_OUTPUT
       - name: Set up Docker Buildx
-        uses: crazy-max/ghaction-docker-buildx@v1
-        with:
-          version: 0.7.1
+        uses: docker/setup-buildx-action@v3
       - name: Prepare
         if: success()
         id: prepare
         run: |
-          echo ::set-output name=docker_platform_arm::${DOCKER_TARGET_PLATFORM_ARM}
-          echo ::set-output name=docker_platform_amd64::${DOCKER_TARGET_PLATFORM_x64}
-          echo ::set-output name=docker_image::${DOCKER_REGISTRY}/${DOCKER_IMAGE}
-          echo ::set-output name=version::${{steps.vars.outputs.tag}}
+          echo "DOCKER_PLATFORM_ARM=${DOCKER_TARGET_PLATFORM_ARM}" >> $GITHUB_OUTPUT
+          echo "DOCKER_PLATFORM_AMD64=${DOCKER_TARGET_PLATFORM_x64}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE=${DOCKER_REGISTRY}/${DOCKER_IMAGE}" >> $GITHUB_OUTPUT
+          echo "VERSION=${{steps.vars.outputs.tag}}" >> $GITHUB_OUTPUT
       - name: Docker Login
         if: success()
         run: |
@@ -46,15 +44,15 @@ jobs:
         if: success()  && github.event_name == 'pull_request' # trigger only a build on PR's.
         run: |
           docker buildx build \
-          --platform ${{ steps.prepare.outputs.docker_platform_arm }},${{ steps.prepare.outputs.docker_platform_amd64 }} \
-          -t ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} \
-          -t ${{ steps.prepare.outputs.docker_image }}:latest \
+          --platform ${{ steps.prepare.outputs.DOCKER_PLATFORM_ARM }},${{ steps.prepare.outputs.DOCKER_PLATFORM_AMD64 }} \
+          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:${{steps.prepare.outputs.VERSION}} \
+          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:latest \
           --file ./Dockerfile -o type=image,push=false .
       - name: Run Buildx (push image)
         if: success()  && github.event_name == 'push' # trigger a build and push to docker registry
         run: |
           docker buildx build \
-          --platform ${{ steps.prepare.outputs.docker_platform_arm }},${{ steps.prepare.outputs.docker_platform_amd64 }} \
-          -t ${{ steps.prepare.outputs.docker_image }}:${{steps.prepare.outputs.version}} \
-          -t ${{ steps.prepare.outputs.docker_image }}:latest \
+          --platform ${{ steps.prepare.outputs.DOCKER_PLATFORM_ARM }},${{ steps.prepare.outputs.DOCKER_PLATFORM_AMD64 }} \
+          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:${{steps.prepare.outputs.VERSION}} \
+          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:latest \
           --file ./Dockerfile -o type=image,push=true .

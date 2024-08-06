@@ -16,7 +16,7 @@ def main():
         datetime.datetime.now().strftime("YYYY_mm_dd_HH:MM:SS")
     )
     logger.info("Starting up Pigbot!")
-    pigbot_config = config.loader()
+    pigbot_config = config.PigBotSettings()
     intents = Intents.default()
     intents.message_content = True
     bot = commands.Bot(intents=intents)
