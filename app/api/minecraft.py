@@ -1,12 +1,11 @@
 from typing import List, Optional
 from mcstatus import JavaServer
-import sys
 from discord.ext import tasks, commands
 from discord import Embed
 import logging
 from models import config
 import asyncio
-from .common import has_ip_changed, message_to_channels, get_ip, update_channel_topics
+from .common import has_ip_changed, message_to_channels, update_channel_topics
 
 from discord import slash_command
 
@@ -152,8 +151,8 @@ class Minecraft(commands.Cog):
                 await message_to_channels(
                     self.bot,
                     self.config.pigbot_minecraft_channels,
-                    embed=Embed(title=msg, description=desc),
-                )
+                    msg=msg,
+                    description=desc)
 
         self.last_online = self.current_online
 
