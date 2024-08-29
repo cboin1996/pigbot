@@ -5,6 +5,7 @@ from discord import Intents
 from api.messaging import Common
 from api.minecraft import Minecraft
 from api.dalle import Dalle
+from api.songbird import Songbird
 from models import config
 from util import logutil
 
@@ -33,6 +34,13 @@ def main():
                 bot,
                 pigbot_config.pigbot_dalle_ip,
                 pigbot_config.pigbot_dalle_port,
+            )
+        )
+    if pigbot_config.pigbot_songbird_enable:
+        bot.add_cog(
+            Songbird(
+                pigbot_config,
+                bot,
             )
         )
     bot.run(pigbot_config.pigbot_token)

@@ -17,6 +17,7 @@ pydantic-settings
 pydantic_core
 python-dotenv
 requests
+songbirdcore
 typing_extensions
 urllib3
 yarl
