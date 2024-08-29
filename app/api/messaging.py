@@ -1,13 +1,14 @@
 from models import talk, art
 from discord.ext import commands
 from discord import Embed
+import discord
 from random import choice
 
 from discord import slash_command
 
 
 class Common(commands.Cog):
-    def __init__(self, bot: commands.bot) -> None:
+    def __init__(self, bot: discord.Bot) -> None:
         self.bot = bot
 
     @slash_command(description="Generates a random response.")

@@ -3,7 +3,7 @@ version: "3"
 output: prefixed
 vars:
   APP_NAME: pigbot
-  VERSION: v0.0.8
+  VERSION: v0.1.2
   APP_ROOT: app
 tasks:
   setup:
@@ -63,7 +63,7 @@ tasks:
   run:
     prefix: run
     cmds:
-      - docker run --rm --name {{.APP_NAME}} -p 443:8443 --env-file $ENV.env {{.APP_NAME}}:{{.VERSION}} --log-level debug
+      - docker run --rm --name {{.APP_NAME}} -v /tmp:/app/downloads -p 443:8443 --env-file $ENV.env {{.APP_NAME}}:{{.VERSION}} --log-level debug
 
   env:
     prefix: env

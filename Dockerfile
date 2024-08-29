@@ -4,7 +4,7 @@ FROM ubuntu:24.04
 # cached items related to the upgrade command
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && apt-get -y upgrade \
-    && apt-get install -y python3-pip && apt-get install -y python3-venv \
+    && apt-get install -y python3-pip python3-venv ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
