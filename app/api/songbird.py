@@ -21,7 +21,9 @@ class Songbird(commands.Cog):
         self.config = config
         if not os.path.exists(self.downloads_folder):
             os.mkdir(self.downloads_folder)
-        logger.info(f"songbird api initialed: downloads will be saved in '{self.downloads_folder}'")
+        logger.info(
+            f"songbird api initialed: downloads will be saved in '{self.downloads_folder}'"
+        )
 
     @slash_command()
     @option(
@@ -36,11 +38,13 @@ class Songbird(commands.Cog):
             if ctx.author.voice:  # pyright: ignore
                 await ctx.author.voice.channel.connect()  # pyright: ignore
             else:
-                await ctx.respond("You must be connected to a voice channel to use 'play'.")
+                await ctx.respond(
+                    "You must be connected to a voice channel to use 'play'."
+                )
                 raise commands.CommandError("Author not connected to a voice channel.")
         elif ctx.voice_client.is_playing():  # pyright: ignore
             ctx.voice_client.stop()  # pyright: ignore
-        
+
         await ctx.defer()
         song_name = str(uuid.uuid4())
         song_path = os.path.join(self.downloads_folder, song_name)
@@ -52,9 +56,7 @@ class Songbird(commands.Cog):
             ),
         )
         # Gets voice channel of message author
-        source = PCMVolumeTransformer(
-            FFmpegPCMAudio(f"{song_path}.mp3")
-        )
+        source = PCMVolumeTransformer(FFmpegPCMAudio(f"{song_path}.mp3"))
         ctx.voice_client.play(
             source, after=lambda e: logger.error("error playing song") if e else None
         )
@@ -74,11 +76,7 @@ class Songbird(commands.Cog):
         logger.info(f"stop command successful.")
 
     @slash_command(description="change volume")
-    @option(
-        "volume",
-        type=int,
-        description="enter an integer, as loud as you want?"
-    )
+    @option("volume", type=int, description="enter an integer, as loud as you want?")
     async def volume(self, ctx, volume: int):
         """Changes the player's volume"""
         logger.info(f"received volume command for volume={volume}")
@@ -88,4 +86,3 @@ class Songbird(commands.Cog):
         ctx.voice_client.source.volume = volume / 100  # pyright: ignore
         await ctx.followup.send(f"Changed volume to {volume}%")
         logger.info(f"volume command issued successfully")
-
