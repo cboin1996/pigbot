@@ -11,12 +11,14 @@ from util import logutil
 
 logger = logging.getLogger(__name__)
 
+VERSION = "0.1.3"
+
 
 def main():
     logutil.set_logger_config_globally(
         datetime.datetime.now().strftime("YYYY_mm_dd_HH:MM:SS")
     )
-    logger.info("Starting up Pigbot!")
+    logger.info(f"Starting up Pigbot {VERSION}!")
     pigbot_config = config.PigBotSettings()
     intents = Intents.default()
     intents.message_content = True
