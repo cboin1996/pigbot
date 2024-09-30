@@ -40,35 +40,41 @@ Note any env vars with a `None` default value are needed to run the server.
 
 ## Development
 
-Mandatory env vars are required from the configuration section in a .env file!
-
-To kickstart the creation of that file, run
+Setup your virtual environment:
 
 ```bash
-task env
+task setup
+source venv/bin/activate
+task install-deps
 ```
 
-### Locally
+Use the following vscode launch config:
 
-Configure vscode debugger for live reload local build (you will need cuda and nvidia drivers):
-
-```bash
+```json
 {
-  "configurations": [
-    {
-      "name": "Python: Pigbot",
-      "type": "python",
-      "request": "launch",
-      "module": "uvicorn",
-      "args": ["app.main:app", "--reload", "--log-level", "debug"],
-      "jinja": true,
-      "justMyCode": true,
-      "envFile": "${workspaceFolder}/.env"
-    },
-  ]
+    "configurations": [
+        {
+            "name": "test-minecraft",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/main.py",
+            "envFile": "${workspaceFolder}/test.env"
+        },
+        {
+            "name": "debug-songbird",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/app/main.py",
+            "env": {
+                "ENV":"songbird",
+                "PIGBOT_TOKEN": "",
+                "PIGBOT_MINECRAFT_ENABLE":"false",
+                "PIGBOT_DALLE_ENABLE":"false",
+                "PIGBOT_SONGBIRD_ENABLE": "true"
+            }
+        }
+    ]
 }
-
-```
 
 ### Docker
 
@@ -82,20 +88,11 @@ task build
 
 Run:
 
-Using a gpu:
-
 ```bash
 task run
 ```
 
-Using cpu only
-
-```bash
-task run-cpu
-```
-
-Development (live reload docker builds with gpu):
-Using gpu:
+Development (live reload docker builds):
 
 ```bash
 task dev -w

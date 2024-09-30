@@ -43,7 +43,7 @@ tasks:
 
   dev:
     prefix: dev
-    desc: runs the app with gpu (use -w flag for live rebuilds)
+    desc: runs the app (use -w flag for live rebuilds)
     cmds:
       - task: clean
       - task: build
