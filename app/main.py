@@ -1,11 +1,12 @@
 import datetime
 import logging
-from discord.ext import commands
-from discord import Intents
+
+from api.dalle import Dalle
 from api.messaging import Common
 from api.minecraft import Minecraft
-from api.dalle import Dalle
 from api.songbird import Songbird
+from discord import Intents
+from discord.ext import commands
 from models import config
 from util import logutil
 
