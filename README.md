@@ -4,6 +4,7 @@ Discord bot playground written in python as practice for docker and python.
 
 ## Features
 
+- Music player via [songbird](https://github.com/cboin1996/songbirdcore)
 - Dalle-mini interface compatible with fastAPI dalle server [dalle-ays](https://github.com/cboin1996/dalle-ays)
   - Image generation via text
   - Model downloading/loading of any dalle-mini and vqgan models
@@ -37,6 +38,7 @@ Note any env vars with a `None` default value are needed to run the server.
 | PIGBOT_DALLE_IP                                    | "localhost" | str       | ip of dalle-ays server                             |
 | PIGBOT_DALLE_PORT                                  | 8000        | int       | port of dalle-ays                                  |
 | PIGBOT_DALLE_MAX_NUMBER_OF_IMAGES                  | 2           | int       | number of images to return by default for dalle    |
+| PIGBOT_SONGBIRD_ENABLE                             | True        | bool      | whether to enable songbird api                     |
 
 ## Development
 
@@ -75,7 +77,8 @@ Use the following vscode launch config:
         }
     ]
 }
-
+```
+ 
 ### Docker
 
 Or, alternatively,
