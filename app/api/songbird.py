@@ -3,7 +3,7 @@ import glob
 import logging
 import os
 import sys
-import uuid
+import re
 from typing import Optional
 
 from discord import (
@@ -40,9 +40,8 @@ class Songbird(commands.Cog):
     def render_queue(self) -> str:
         """render the queue as a formatted str"""
         if len(self.queue) == 0:
-            return "No songs in queue."
-
-        message = "Songs in queue: \n\n"
+            return ""
+        message = ""
         for i, item in enumerate(self.queue):
             message += f"{i}. {item}\n"
 
@@ -64,6 +63,14 @@ class Songbird(commands.Cog):
                 logger.info(f"watch_id={watch_id} found on disk: {song}")
                 return song.replace(f".{self.song_format}", "")
 
+    def _get_video_id(self, url: str) -> str:
+        pattern = r"(?:v=|\/)([0-9A-Za-z_-]{11}).*"
+        regex = re.compile(pattern)
+        results = regex.search(url)
+        if not results:
+            raise ValueError(f"No match for regex pattern {pattern} within {url}.")
+        return results.group(1)
+
     def _play_next(self, ctx):
         """synchronous callback for playing next songs in queue."""
         loop = self.bot.loop or asyncio.get_event_loop()
@@ -78,7 +85,7 @@ class Songbird(commands.Cog):
 
         url = self.queue.pop(0)
         # check if song is on disk
-        watch_id = url.split("=")[1]
+        watch_id = self._get_video_id(url)
         song_path = self._find_song(watch_id)
         if not song_path:
             song_path = os.path.join(self.downloads_folder, watch_id)
@@ -89,13 +96,11 @@ class Songbird(commands.Cog):
         ctx.voice_client.play(source, after=lambda e: self._play_next(ctx))
         asyncio.run_coroutine_threadsafe(
             ctx.followup.send(
-                embed=Embed(
-                    title=f"now playing: {url}.", description=self.render_queue()
-                )
+                f"Playing: {url}."
             ),
             loop,
         )
-
+    
     async def _play(self, ctx, url: str = ""):
         """routes play command to various tasks."""
         # base condition
@@ -116,7 +121,7 @@ class Songbird(commands.Cog):
             logger.info(msg)
             return await ctx.respond(
                 embed=Embed(
-                    title=f"Added '{url}' to queue.", description=self.render_queue()
+                    title=f"Added '{url}' to queue:\n", description=self.render_queue()
                 )
             )
 
@@ -135,7 +140,7 @@ class Songbird(commands.Cog):
                 url = self.queue.pop(0)
 
         # check if song is on disk
-        watch_id = url.split("=")[1]
+        watch_id = self._get_video_id(url)
         song_path = self._find_song(watch_id)
         if not song_path:
             song_path = os.path.join(self.downloads_folder, watch_id)
@@ -149,7 +154,7 @@ class Songbird(commands.Cog):
         source = PCMVolumeTransformer(FFmpegPCMAudio(f"{song_path}.{self.song_format}"))
         ctx.voice_client.play(source, after=lambda e: self._play_next(ctx))
         await ctx.followup.send(
-            embed=Embed(title=f"now playing: {url}", description=self.render_queue())
+            f"Playing: {url}."
         )
 
     @slash_command(description="play a song. add's song to queue if already playing")
@@ -218,11 +223,15 @@ class Songbird(commands.Cog):
         ctx.voice_client.source.volume = volume / 100  # pyright: ignore
         await ctx.followup.send(f"Changed volume to {volume}%")
 
-    @slash_command(description="list the contents of the queue")
+    @slash_command(description="List the contents of the queue")
     async def list(self, ctx):
         """list the contents of the queue"""
-        await ctx.respond(
-            embed=Embed(
-                title="View the queue contents below", description=self.render_queue()
+        async with self.queue_lock:
+            if len(self.queue) > 0:
+                msg = f"View the queue contents below: \n\n{self.render_queue()}"
+            else:
+                msg = f"Queue is empty"
+
+            await ctx.respond(
+                msg 
             )
-        )
