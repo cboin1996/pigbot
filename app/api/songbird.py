@@ -1,12 +1,19 @@
 import asyncio
+import enum
 import glob
+import json
 import logging
 import os
-import sys
 import re
-from typing import Optional
+import sys
+import uuid
+from typing import Dict, Optional
 
+import pydantic
+import requests
+from bs4 import BeautifulSoup
 from discord import (
+    AutocompleteContext,
     Bot,
     Embed,
     FFmpegPCMAudio,
@@ -21,6 +28,84 @@ from songbirdcore import youtube
 
 logger = logging.getLogger(__name__)
 
+SONG_MATCH_SPLIT_KEY = "--> "
+
+
+class YoutubeMeta(pydantic.BaseModel):
+    url: str
+    file_path: str
+    # set title via best-effort.
+    title: Optional[str]
+
+
+class MetaDbManager:
+
+    def __init__(self, path: str):
+        self.path = path
+        # initialize metadata db
+        if not os.path.exists(path):
+            with open(path, "w") as f:
+                json.dump({}, f)
+                self.db = {}
+
+    def write(self) -> bool:
+        try:
+            with open(self.path, "w") as f:
+                json.dump(self.db, f)
+                logger.info(f"wrote meta db '{self.path}'")
+                return True
+        except Exception as e:
+            logger.exception(f"error while writing metadata to {self.path}", e)
+            return False
+
+    def load(self) -> bool:
+        try:
+            with open(self.path, "r") as f:
+                self.db = json.load(f)
+                logger.info(f"loaded meta db '{self.path}'")
+                return True
+
+        except Exception as e:
+            logger.exception(f"error while reading metadata from {self.path}", e)
+            return False
+
+    def get_song_meta(self, id: str) -> Optional[dict]:
+        """retrieve song metadata given an id, and song provider
+        Args:
+            song_provider (MetaDbSongProviders): the song provider
+            id (str): the id of the song
+
+        Returns (dict): song metadata
+        """
+        success = self.load()
+        if not success:
+            return None
+
+        return self.db.get(id, None)
+
+    def add_song_meta(self, id: str, song_meta: dict) -> bool:
+        self.db[id] = song_meta
+        return self.write()
+
+
+def _get_url_from_title(ctx: AutocompleteContext):
+    ctx.cog.meta_db.load()  # pyright: ignore
+    db = ctx.cog.meta_db.db  # pyright: ignore
+    try:
+        matched_files = []
+        for id, item in db.items():
+            parsed_item = YoutubeMeta.model_validate(item)
+            if parsed_item.title and ctx.value.lower() in parsed_item.title:
+                matched_files.append(
+                    f"{parsed_item.url}{SONG_MATCH_SPLIT_KEY}{parsed_item.title}"[:97]
+                    + "..."
+                )
+
+        return matched_files
+    except Exception as e:
+        logger.exception(f"error while attempting autocomplete: ", e)
+        return []
+
 
 class Songbird(commands.Cog):
     def __init__(self, config: config.PigBotSettings, bot: Bot) -> None:
@@ -31,10 +116,14 @@ class Songbird(commands.Cog):
         self.downloads_folder = os.path.join(sys.path[0], "downloads")
         self.config = config
         self.song_format = "mp3"
+        self.meta_db = MetaDbManager(
+            path=os.path.join(sys.path[0], "downloads", "metadb.json")
+        )
+
         if not os.path.exists(self.downloads_folder):
             os.mkdir(self.downloads_folder)
         logger.info(
-            f"songbird api initialed: downloads will be saved in '{self.downloads_folder}'"
+            f"songbird api initialized: downloads will be saved in '{self.downloads_folder}'"
         )
 
     def render_queue(self) -> str:
@@ -71,6 +160,57 @@ class Songbird(commands.Cog):
             raise ValueError(f"No match for regex pattern {pattern} within {url}.")
         return results.group(1)
 
+    def _get_video_title(self, url: str) -> Optional[str]:
+        try:
+            r = requests.get(url)
+            soup = BeautifulSoup(r.text, "html.parser")
+            link = soup.find_all(name="title")[0]
+            return link.text
+
+        except Exception as e:
+            logger.exception(
+                f"could not get title for video '{url}'. Continuing without", e
+            )
+            return None
+
+    def youtube_download(self, url: str) -> Optional[str]:
+        """downloads a song from youtube if not on disk,
+        otherwise returns song from disk
+
+        Args:
+            url (str): the url to download
+            song_path (str): the name of the file to save the download to, excluding extension
+
+        Returns:
+            the file-path to the song, otherwise None if error occured.
+        """
+        id = self._get_video_id(url)
+        song_path = os.path.join(self.downloads_folder, id)
+        # query metadata db
+        song_meta = self.meta_db.get_song_meta(id)
+        if song_meta:
+            try:
+                return YoutubeMeta.model_validate(song_meta).file_path
+            except pydantic.ValidationError as e:
+                logger.exception(f"could not parse youtube song meta '{song_meta}'.", e)
+
+        result_path = youtube.run_download(
+            url=url, file_path_no_format=song_path, file_format=self.song_format
+        )
+        if not result_path:
+            return None
+
+        success = self.meta_db.add_song_meta(
+            id=id,
+            song_meta=YoutubeMeta(
+                url=url, title=self._get_video_title(url), file_path=result_path
+            ).model_dump(),
+        )
+        if not success:
+            return None
+
+        return result_path
+
     def _play_next(self, ctx):
         """synchronous callback for playing next songs in queue."""
         loop = self.bot.loop or asyncio.get_event_loop()
@@ -84,23 +224,26 @@ class Songbird(commands.Cog):
             )
 
         url = self.queue.pop(0)
-        # check if song is on disk
-        watch_id = self._get_video_id(url)
-        song_path = self._find_song(watch_id)
-        if not song_path:
-            song_path = os.path.join(self.downloads_folder, watch_id)
-            youtube.run_download(
-                url=url, file_path_no_format=song_path, file_format=self.song_format
-            )
-        source = PCMVolumeTransformer(FFmpegPCMAudio(f"{song_path}.{self.song_format}"))
+        song_path = self.youtube_download(url)
+        source = PCMVolumeTransformer(FFmpegPCMAudio(f"{song_path}"))
         ctx.voice_client.play(source, after=lambda e: self._play_next(ctx))
         asyncio.run_coroutine_threadsafe(
-            ctx.followup.send(
-                f"Playing: {url}."
-            ),
+            ctx.followup.send(f"Playing: {url}."),
             loop,
         )
-    
+
+    async def enqueue(self, ctx, url: str = ""):
+        if url != "":
+            async with self.queue_lock:
+                self.queue.append(url)
+            msg = f"added '{url}' to queue.. queue length is '{len(self.queue)}'"
+            logger.info(msg)
+            return await ctx.respond(
+                embed=Embed(
+                    title=f"Added '{url}' to queue:\n", description=self.render_queue()
+                )
+            )
+
     async def _play(self, ctx, url: str = ""):
         """routes play command to various tasks."""
         # base condition
@@ -113,21 +256,13 @@ class Songbird(commands.Cog):
                 )
                 raise commands.CommandError("Author not connected to a voice channel.")
 
-        # queue song
         if ctx.voice_client.is_playing():  # pyright: ignore
-            async with self.queue_lock:
-                self.queue.append(url)
-            msg = f"added '{url}' to queue.. queue length is '{len(self.queue)}'"
-            logger.info(msg)
-            return await ctx.respond(
-                embed=Embed(
-                    title=f"Added '{url}' to queue:\n", description=self.render_queue()
-                )
-            )
+            # queue song if url provided
+            await self.enqueue(ctx, url)
+            return
 
         # ctx.defer expects followup
         await ctx.defer()
-
         # check if song is in queue if no url provided
         if url == "":
             if len(self.queue) == 0:
@@ -139,23 +274,11 @@ class Songbird(commands.Cog):
             async with self.queue_lock:
                 url = self.queue.pop(0)
 
-        # check if song is on disk
-        watch_id = self._get_video_id(url)
-        song_path = self._find_song(watch_id)
-        if not song_path:
-            song_path = os.path.join(self.downloads_folder, watch_id)
-            loop = self.bot.loop or asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                lambda: youtube.run_download(
-                    url=url, file_path_no_format=song_path, file_format=self.song_format
-                ),
-            )
-        source = PCMVolumeTransformer(FFmpegPCMAudio(f"{song_path}.{self.song_format}"))
+        loop = self.bot.loop or asyncio.get_event_loop()
+        song_path = await loop.run_in_executor(None, lambda: self.youtube_download(url))
+        source = PCMVolumeTransformer(FFmpegPCMAudio(f"{song_path}"))
         ctx.voice_client.play(source, after=lambda e: self._play_next(ctx))
-        await ctx.followup.send(
-            f"Playing: {url}."
-        )
+        await ctx.followup.send(f"Playing: {url}.")
 
     @slash_command(description="play a song. add's song to queue if already playing")
     @option(
@@ -163,9 +286,13 @@ class Songbird(commands.Cog):
         type=str,
         description="url of song to play. If unspecified, next song in queue is played.",
     )
-    async def play(self, ctx, url: str = ""):
-        logger.info(f"received play command, url='{url}'")
-        await self._play(ctx, url)
+    @option("search", type=str, autocomplete=_get_url_from_title)
+    async def play(self, ctx, url: str = "", search: str = ""):
+        logger.info(f"received play command: url='{url}', search='{search}'")
+        if url != "":
+            await self._play(ctx, url)
+        if search != "":
+            await self._play(ctx, search.split(SONG_MATCH_SPLIT_KEY)[0])
 
     @slash_command(description="skip current song.")
     async def next(self, ctx):
@@ -176,6 +303,10 @@ class Songbird(commands.Cog):
             logger.info(f"stopping current song")
             ctx.voice_client.stop()
             return await ctx.respond("skipping current song!")
+        else:
+            return await ctx.respond(
+                "Uh-uh-uh.. I can't skip a song if there isn't one playing"
+            )
 
     @slash_command(
         description="disconnect pigbot from the voice channel, quitting the current song."
@@ -199,6 +330,8 @@ class Songbird(commands.Cog):
         if ctx.voice_client.is_paused():
             ctx.voice_client.resume()
             await ctx.respond("resuming")
+        else:
+            await ctx.respond("nothing to resume.")
 
     @slash_command(description="resume the current song")
     async def pause(self, ctx):
@@ -210,6 +343,8 @@ class Songbird(commands.Cog):
         if ctx.voice_client.is_playing():
             ctx.voice_client.pause()
             await ctx.respond("pausing")
+        else:
+            await ctx.respond("nothing to pause :(")
 
     @slash_command(description="change volume")
     @option("volume", type=int, description="enter an integer, as loud as you want?")
@@ -232,6 +367,4 @@ class Songbird(commands.Cog):
             else:
                 msg = f"Queue is empty"
 
-            await ctx.respond(
-                msg 
-            )
+            await ctx.respond(msg)
