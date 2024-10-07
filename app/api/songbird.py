@@ -6,7 +6,6 @@ import logging
 import os
 import re
 import sys
-import uuid
 from typing import Dict, Optional
 
 import pydantic
@@ -25,6 +24,7 @@ from discord.ext import commands
 from discord.utils import get
 from models import config
 from songbirdcore import youtube
+from util import trie
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +42,17 @@ class MetaDbManager:
 
     def __init__(self, path: str):
         self.path = path
+        self.trie = trie.Trie()
+
         # initialize metadata db
         if not os.path.exists(path):
             with open(path, "w") as f:
                 json.dump({}, f)
                 self.db = {}
+
+        # ingest metadb into trie for rapid memory lookup of song names
+        # and associated metadb keys
+        self.load()
 
     def write(self) -> bool:
         try:
@@ -63,13 +69,23 @@ class MetaDbManager:
             with open(self.path, "r") as f:
                 self.db = json.load(f)
                 logger.info(f"loaded meta db '{self.path}'")
-                return True
+
+            for id, item in self.db.items():
+                parsed_item = YoutubeMeta.model_validate(item)
+                if parsed_item.title:
+                    self.trie.insert(parsed_item.title, terminator=id)
+                else:
+                    logger.info(
+                        f"skipping insertion of song w/ url {item.url} as no title exists for it within meta db."
+                    )
+            logger.info(f"trie constructed successfully")
+            return True
 
         except Exception as e:
-            logger.exception(f"error while reading metadata from {self.path}", e)
+            logger.exception(f"error while initializing metadatadb: ", e)
             return False
 
-    def get_song_meta(self, id: str) -> Optional[dict]:
+    def get_song_meta(self, id: str) -> Optional[YoutubeMeta]:
         """retrieve song metadata given an id, and song provider
         Args:
             song_provider (MetaDbSongProviders): the song provider
@@ -77,31 +93,66 @@ class MetaDbManager:
 
         Returns (dict): song metadata
         """
-        success = self.load()
-        if not success:
+        item = self.db.get(id, None)
+        if not item:
+            logger.error(f"no item in meta db for id: {id}")
+            return None
+        try:
+            return YoutubeMeta.model_validate(item)
+        except pydantic.ValidationError as e:
+            logger.exception(f"could not parse metadata item: {item}", e)
             return None
 
-        return self.db.get(id, None)
-
-    def add_song_meta(self, id: str, song_meta: dict) -> bool:
-        self.db[id] = song_meta
+    def add_song_meta(self, id: str, song_meta: YoutubeMeta) -> bool:
+        # update meta db
+        self.db[id] = song_meta.model_dump()
+        # update trie if title exists for song
+        if song_meta.title:
+            self.trie.insert(song_meta.title, terminator=id)
         return self.write()
 
 
-def _get_url_from_title(ctx: AutocompleteContext):
-    ctx.cog.meta_db.load()  # pyright: ignore
-    db = ctx.cog.meta_db.db  # pyright: ignore
+async def _get_url_from_title(ctx: AutocompleteContext):
+    db_lock = ctx.cog.meta_db_lock  # pyright: ignore
+    db = ctx.cog.meta_db  # pyright: ignore
+    trie = ctx.cog.meta_db.trie  # pyright: ignore
+    output_to_user = []
     try:
-        matched_files = []
-        for id, item in db.items():
-            parsed_item = YoutubeMeta.model_validate(item)
-            if parsed_item.title and ctx.value.lower() in parsed_item.title:
-                matched_files.append(
-                    f"{parsed_item.url}{SONG_MATCH_SPLIT_KEY}{parsed_item.title}"[:97]
+        async with db_lock:
+            if ctx.value == "":
+                trie_matches = trie.list_keys(trie.root)
+            else:
+                trie_matches = trie.starts_with(ctx.value)  # pyright: ignore
+
+        # must recieve trie matches and their terminators,
+        # which correspond to watch ids
+        if not trie_matches:
+            logger.info(f"no matches from trie for query: {ctx.value}")
+            return []
+
+        logger.info(f"recieved matches from trie: {trie_matches}")
+        # load matching data from meta_db
+        # for each match from the trie
+        # retrieve the termination value -- which is the watch id
+
+        for match in trie_matches:
+            async with db_lock:
+                # search in trie takes iterations O(k)
+                # where k is length of match
+                match_terminators = trie.search(match)
+
+            # perform constant lookup for each terminator,
+            # and add result to output
+            for terminator in match_terminators:
+                async with db_lock:
+                    song_meta = db.get_song_meta(terminator)
+                output_to_user.append(
+                    f"{song_meta.url}{SONG_MATCH_SPLIT_KEY}{song_meta.title}"[:97]
                     + "..."
                 )
+                logger.info(f"output to user = {output_to_user}")
 
-        return matched_files
+        return output_to_user
     except Exception as e:
         logger.exception(f"error while attempting autocomplete: ", e)
         return []
@@ -119,6 +170,7 @@ class Songbird(commands.Cog):
         self.meta_db = MetaDbManager(
             path=os.path.join(sys.path[0], "downloads", "metadb.json")
         )
+        self.meta_db_lock = asyncio.Lock()
 
         if not os.path.exists(self.downloads_folder):
             os.mkdir(self.downloads_folder)
@@ -173,7 +225,7 @@ class Songbird(commands.Cog):
             )
             return None
 
-    def youtube_download(self, url: str) -> Optional[str]:
+    async def get_song(self, url: str) -> Optional[str]:
         """downloads a song from youtube if not on disk,
         otherwise returns song from disk
 
@@ -187,28 +239,33 @@ class Songbird(commands.Cog):
         id = self._get_video_id(url)
         song_path = os.path.join(self.downloads_folder, id)
         # query metadata db
-        song_meta = self.meta_db.get_song_meta(id)
-        if song_meta:
-            try:
-                return YoutubeMeta.model_validate(song_meta).file_path
-            except pydantic.ValidationError as e:
-                logger.exception(f"could not parse youtube song meta '{song_meta}'.", e)
+        async with self.meta_db_lock:
+            song_meta = self.meta_db.get_song_meta(id)
 
-        result_path = youtube.run_download(
-            url=url, file_path_no_format=song_path, file_format=self.song_format
+        if song_meta:
+            return song_meta.file_path
+
+        # allow concurrent downloads
+        # since songbird is blocking
+        loop = self.bot.loop or asyncio.get_event_loop()
+        result_path = await loop.run_in_executor(
+            None,
+            lambda: youtube.run_download(
+                url=url, file_path_no_format=song_path, file_format=self.song_format
+            ),
         )
         if not result_path:
             return None
-
-        success = self.meta_db.add_song_meta(
-            id=id,
-            song_meta=YoutubeMeta(
-                url=url, title=self._get_video_title(url), file_path=result_path
-            ).model_dump(),
-        )
-        if not success:
-            return None
-
+        # add song meta to db
+        async with self.meta_db_lock:
+            success = self.meta_db.add_song_meta(
+                id=id,
+                song_meta=YoutubeMeta(
+                    url=url, title=self._get_video_title(url), file_path=result_path
+                ),
+            )
+            if not success:
+                return None
         return result_path
 
     def _play_next(self, ctx):
@@ -224,21 +281,29 @@ class Songbird(commands.Cog):
             )
 
         url = self.queue.pop(0)
-        song_path = self.youtube_download(url)
-        source = PCMVolumeTransformer(FFmpegPCMAudio(f"{song_path}"))
+        fut = asyncio.run_coroutine_threadsafe(self.get_song(url), loop)
+        song_path = fut.result()
+        if not song_path:
+            msg = f"An error occured while trying to obtain a song for url '{url}'."
+            logger.error(msg)
+            return asyncio.run_coroutine_threadsafe(ctx.followup.send(msg), loop)
+        # assert before playing that another song isn't playing.
+        if ctx.voice_client.is_playing():
+            asyncio.run_coroutine_threadsafe(self.enqueue(ctx.followup.send, url), loop)
+        source = PCMVolumeTransformer(FFmpegPCMAudio(song_path))
         ctx.voice_client.play(source, after=lambda e: self._play_next(ctx))
         asyncio.run_coroutine_threadsafe(
             ctx.followup.send(f"Playing: {url}."),
             loop,
         )
 
-    async def enqueue(self, ctx, url: str = ""):
+    async def enqueue(self, response_func, url: str = ""):
         if url != "":
             async with self.queue_lock:
                 self.queue.append(url)
             msg = f"added '{url}' to queue.. queue length is '{len(self.queue)}'"
             logger.info(msg)
-            return await ctx.respond(
+            return await response_func(
                 embed=Embed(
                     title=f"Added '{url}' to queue:\n", description=self.render_queue()
                 )
@@ -258,7 +323,7 @@ class Songbird(commands.Cog):
 
         if ctx.voice_client.is_playing():  # pyright: ignore
             # queue song if url provided
-            await self.enqueue(ctx, url)
+            await self.enqueue(ctx.respond, url)
             return
 
         # ctx.defer expects followup
@@ -274,9 +339,16 @@ class Songbird(commands.Cog):
             async with self.queue_lock:
                 url = self.queue.pop(0)
 
-        loop = self.bot.loop or asyncio.get_event_loop()
-        song_path = await loop.run_in_executor(None, lambda: self.youtube_download(url))
-        source = PCMVolumeTransformer(FFmpegPCMAudio(f"{song_path}"))
+        song_path = await self.get_song(url)
+        if not song_path:
+            msg = f"An error occured while trying to obtain a song for url '{url}'."
+            logger.error(msg)
+            return ctx.followup.send(msg)
+
+        # assert before playing that another song isn't playing.
+        if ctx.voice_client.is_playing():
+            return await self.enqueue(ctx.followup.send, url)
+        source = PCMVolumeTransformer(FFmpegPCMAudio(song_path))
         ctx.voice_client.play(source, after=lambda e: self._play_next(ctx))
         await ctx.followup.send(f"Playing: {url}.")
 
@@ -301,8 +373,8 @@ class Songbird(commands.Cog):
             return await ctx.respond("I am not connected to a voice channel..")
         if ctx.voice_client.is_playing():
             logger.info(f"stopping current song")
-            ctx.voice_client.stop()
-            return await ctx.respond("skipping current song!")
+            await ctx.respond("skipping current song!")
+            return ctx.voice_client.stop()
         else:
             return await ctx.respond(
                 "Uh-uh-uh.. I can't skip a song if there isn't one playing"
