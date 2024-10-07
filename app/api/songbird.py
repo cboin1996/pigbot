@@ -177,7 +177,6 @@ class Songbird(commands.Cog):
         )
         self.meta_db_lock = asyncio.Lock()
 
-
     def render_queue(self) -> str:
         """render the queue as a formatted str"""
         if len(self.queue) == 0:
