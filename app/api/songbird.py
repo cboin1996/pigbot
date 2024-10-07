@@ -167,16 +167,16 @@ class Songbird(commands.Cog):
         self.downloads_folder = os.path.join(sys.path[0], "downloads")
         self.config = config
         self.song_format = "mp3"
-        self.meta_db = MetaDbManager(
-            path=os.path.join(sys.path[0], "downloads", "metadb.json")
-        )
-        self.meta_db_lock = asyncio.Lock()
-
         if not os.path.exists(self.downloads_folder):
             os.mkdir(self.downloads_folder)
         logger.info(
             f"songbird api initialized: downloads will be saved in '{self.downloads_folder}'"
         )
+        self.meta_db = MetaDbManager(
+            path=os.path.join(sys.path[0], "downloads", "metadb.json")
+        )
+        self.meta_db_lock = asyncio.Lock()
+
 
     def render_queue(self) -> str:
         """render the queue as a formatted str"""
