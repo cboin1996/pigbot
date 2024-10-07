@@ -31,7 +31,6 @@ logger = logging.getLogger(__name__)
 SONG_MATCH_SPLIT_KEY = "--> "
 
 
-
 class YoutubeMeta(pydantic.BaseModel):
     url: str
     file_path: str
@@ -74,12 +73,11 @@ class MetaDbManager:
             for id, item in self.db.items():
                 parsed_item = YoutubeMeta.model_validate(item)
                 if parsed_item.title:
-                    self.trie.insert(
-                        parsed_item.title,
-                        terminator=id
-                    )
+                    self.trie.insert(parsed_item.title, terminator=id)
                 else:
-                    logger.info(f"skipping insertion of song w/ url {item.url} as no title exists for it within meta db.")
+                    logger.info(
+                        f"skipping insertion of song w/ url {item.url} as no title exists for it within meta db."
+                    )
             logger.info(f"trie constructed successfully")
             return True
 
@@ -110,23 +108,21 @@ class MetaDbManager:
         self.db[id] = song_meta.model_dump()
         # update trie if title exists for song
         if song_meta.title:
-            self.trie.insert(
-                song_meta.title,
-                terminator=id
-            )
+            self.trie.insert(song_meta.title, terminator=id)
         return self.write()
 
+
 async def _get_url_from_title(ctx: AutocompleteContext):
-    db_lock = ctx.cog.meta_db_lock # pyright: ignore
+    db_lock = ctx.cog.meta_db_lock  # pyright: ignore
     db = ctx.cog.meta_db  # pyright: ignore
-    trie = ctx.cog.meta_db.trie # pyright: ignore
+    trie = ctx.cog.meta_db.trie  # pyright: ignore
     output_to_user = []
     try:
         async with db_lock:
             if ctx.value == "":
                 trie_matches = trie.list_keys(trie.root)
             else:
-                trie_matches = trie.starts_with(ctx.value) # pyright: ignore
+                trie_matches = trie.starts_with(ctx.value)  # pyright: ignore
 
         # must recieve trie matches and their terminators,
         # which correspond to watch ids
@@ -144,7 +140,7 @@ async def _get_url_from_title(ctx: AutocompleteContext):
                 # search in trie takes iterations O(k)
                 # where k is length of match
                 match_terminators = trie.search(match)
-            
+
             # perform constant lookup for each terminator,
             # and add result to output
             for terminator in match_terminators:
@@ -249,23 +245,27 @@ class Songbird(commands.Cog):
         if song_meta:
             return song_meta.file_path
 
-        result_path = youtube.run_download(
-            url=url, file_path_no_format=song_path, file_format=self.song_format
+        # allow concurrent downloads
+        # since songbird is blocking
+        loop = self.bot.loop or asyncio.get_event_loop()
+        result_path = await loop.run_in_executor(
+            None,
+            lambda: youtube.run_download(
+                url=url, file_path_no_format=song_path, file_format=self.song_format
+            ),
         )
         if not result_path:
             return None
-        
         # add song meta to db
         async with self.meta_db_lock:
             success = self.meta_db.add_song_meta(
                 id=id,
                 song_meta=YoutubeMeta(
                     url=url, title=self._get_video_title(url), file_path=result_path
-                )
+                ),
             )
             if not success:
                 return None
-
         return result_path
 
     def _play_next(self, ctx):
@@ -281,18 +281,15 @@ class Songbird(commands.Cog):
             )
 
         url = self.queue.pop(0)
-        fut = asyncio.run_coroutine_threadsafe(
-            self.get_song(url),
-            loop
-        )
+        fut = asyncio.run_coroutine_threadsafe(self.get_song(url), loop)
         song_path = fut.result()
         if not song_path:
             msg = f"An error occured while trying to obtain a song for url '{url}'."
             logger.error(msg)
-            return asyncio.run_coroutine_threadsafe(
-                ctx.followup.send(msg),
-                loop
-            )
+            return asyncio.run_coroutine_threadsafe(ctx.followup.send(msg), loop)
+        # assert before playing that another song isn't playing.
+        if ctx.voice_client.is_playing():
+            asyncio.run_coroutine_threadsafe(self.enqueue(ctx.followup.send, url), loop)
         source = PCMVolumeTransformer(FFmpegPCMAudio(song_path))
         ctx.voice_client.play(source, after=lambda e: self._play_next(ctx))
         asyncio.run_coroutine_threadsafe(
@@ -300,13 +297,13 @@ class Songbird(commands.Cog):
             loop,
         )
 
-    async def enqueue(self, ctx, url: str = ""):
+    async def enqueue(self, response_func, url: str = ""):
         if url != "":
             async with self.queue_lock:
                 self.queue.append(url)
             msg = f"added '{url}' to queue.. queue length is '{len(self.queue)}'"
             logger.info(msg)
-            return await ctx.respond(
+            return await response_func(
                 embed=Embed(
                     title=f"Added '{url}' to queue:\n", description=self.render_queue()
                 )
@@ -326,7 +323,7 @@ class Songbird(commands.Cog):
 
         if ctx.voice_client.is_playing():  # pyright: ignore
             # queue song if url provided
-            await self.enqueue(ctx, url)
+            await self.enqueue(ctx.respond, url)
             return
 
         # ctx.defer expects followup
@@ -346,9 +343,12 @@ class Songbird(commands.Cog):
         if not song_path:
             msg = f"An error occured while trying to obtain a song for url '{url}'."
             logger.error(msg)
-            return ctx.followup.send(msg),
- 
-        source = PCMVolumeTransformer(FFmpegPCMAudio(f"{song_path}"))
+            return ctx.followup.send(msg)
+
+        # assert before playing that another song isn't playing.
+        if ctx.voice_client.is_playing():
+            return await self.enqueue(ctx.followup.send, url)
+        source = PCMVolumeTransformer(FFmpegPCMAudio(song_path))
         ctx.voice_client.play(source, after=lambda e: self._play_next(ctx))
         await ctx.followup.send(f"Playing: {url}.")
 
