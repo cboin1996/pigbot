@@ -12,7 +12,7 @@ from util import logutil
 
 logger = logging.getLogger(__name__)
 
-VERSION = "0.1.4"
+VERSION = "v0.1.5"
 
 
 def main():
