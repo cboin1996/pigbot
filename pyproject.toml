@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pigbot"
+authors = [
+    {name = "Christian Boin"},
+]
+version = "0.1.6"
+description = "discord bot with some fun features"
+readme = "README.md"
+requires-python = ">=3.11"
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["pigbot/requirements.txt"]}
+
+[project.optional-dependencies]
+# these dependencies are required for development,
+# not for running the package.
+dev = [
+    # lint
+    "black",
+    "click",
+    "isort",
+    # test
+    "pytest",
+    "pytest-cov",
+    # docs
+    "mkdocs",
+    "mkdocs-material",
+    "mike",
+    "mkdocstrings-python"
+]
+package = [
+    "build",
+    "twine"
+]
+
+[tool.setuptools.packages.find]
+exclude = ["junit"]

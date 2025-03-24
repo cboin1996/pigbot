@@ -9,17 +9,16 @@ from discord import Intents
 from discord.ext import commands
 from models import config
 from util import logutil
+import version
 
 logger = logging.getLogger(__name__)
-
-VERSION = "v0.1.5"
 
 
 def main():
     logutil.set_logger_config_globally(
         datetime.datetime.now().strftime("YYYY_mm_dd_HH:MM:SS")
     )
-    logger.info(f"Starting up Pigbot {VERSION}!")
+    logger.info(f"Starting up Pigbot {version.VERSION}!")
     pigbot_config = config.PigBotSettings()
     intents = Intents.default()
     intents.message_content = True

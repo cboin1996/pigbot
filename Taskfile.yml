@@ -19,7 +19,7 @@ tasks:
     prefix: install-deps
     cmds:
       - pip install --upgrade pip
-      - pip install black isort
+      - pip install -e .[dev]
       - pip install -r {{.APP_ROOT}}/requirements.txt
       - pip install pydantic[dotenv]
 
