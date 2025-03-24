@@ -12,3 +12,5 @@ __pycache__
 # downloads
 
 downloads
+
+*.egg-info

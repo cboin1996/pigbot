@@ -3,7 +3,7 @@ version: "3"
 output: prefixed
 vars:
   APP_NAME: pigbot
-  VERSION: v0.1.5
+  VERSION: v0.1.6
   APP_ROOT: app
 tasks:
   setup:
@@ -19,7 +19,7 @@ tasks:
     prefix: install-deps
     cmds:
       - pip install --upgrade pip
-      - pip install black isort
+      - pip install -e .[dev]
       - pip install -r {{.APP_ROOT}}/requirements.txt
       - pip install pydantic[dotenv]
 
