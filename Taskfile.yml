@@ -3,7 +3,7 @@ version: "3"
 output: prefixed
 vars:
   APP_NAME: pigbot
-  VERSION: v0.1.6
+  VERSION: v0.2.0
   APP_ROOT: app
 tasks:
   setup:

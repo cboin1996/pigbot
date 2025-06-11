@@ -25,13 +25,14 @@ from discord.utils import get
 from models import config
 from songbirdcore import youtube
 from util import trie
+import abc
 
 logger = logging.getLogger(__name__)
 
 SONG_MATCH_SPLIT_KEY = "--> "
 
 
-class YoutubeMeta(pydantic.BaseModel):
+class SongMeta(pydantic.BaseModel):
     url: str
     file_path: str
     # set title via best-effort.
@@ -71,12 +72,12 @@ class MetaDbManager:
                 logger.info(f"loaded meta db '{self.path}'")
 
             for id, item in self.db.items():
-                parsed_item = YoutubeMeta.model_validate(item)
+                parsed_item = SongMeta.model_validate(item)
                 if parsed_item.title:
                     self.trie.insert(parsed_item.title, terminator=id)
                 else:
                     logger.info(
-                        f"skipping insertion of song w/ url {item.url} as no title exists for it within meta db."
+                        f"skipping insertion of song w/ url {parsed_item.url} as no title exists for it within meta db."
                     )
             logger.info(f"trie constructed successfully")
             return True
@@ -85,7 +86,7 @@ class MetaDbManager:
             logger.exception(f"error while initializing metadatadb: ", e)
             return False
 
-    def get_song_meta(self, id: str) -> Optional[YoutubeMeta]:
+    def get_song_meta(self, id: str) -> Optional[SongMeta]:
         """retrieve song metadata given an id, and song provider
         Args:
             song_provider (MetaDbSongProviders): the song provider
@@ -98,12 +99,12 @@ class MetaDbManager:
             logger.error(f"no item in meta db for id: {id}")
             return None
         try:
-            return YoutubeMeta.model_validate(item)
+            return SongMeta.model_validate(item)
         except pydantic.ValidationError as e:
             logger.exception(f"could not parse metadata item: {item}", e)
             return None
 
-    def add_song_meta(self, id: str, song_meta: YoutubeMeta) -> bool:
+    def add_song_meta(self, id: str, song_meta: SongMeta) -> bool:
         # update meta db
         self.db[id] = song_meta.model_dump()
         # update trie if title exists for song
@@ -158,6 +159,80 @@ async def _get_url_from_title(ctx: AutocompleteContext):
         return []
 
 
+class SongMetaProviders(enum.StrEnum):
+    YOUTUBE = "youtube"
+    VIMEO = "vimeo"
+    SOUNDCLOUD = "soundcloud"
+
+
+class SongMetaFetcher(abc.ABC):
+    def __init__(self, url: str):
+        self.url = url
+
+    @abc.abstractmethod
+    def get_video_id(self) -> str:
+        pass
+
+    def get_video_title(self) -> Optional[str]:
+        try:
+            r = requests.get(self.url)
+            soup = BeautifulSoup(r.text, "html.parser")
+            return self.parse_title_from_soup(soup)
+
+        except Exception as e:
+            logger.exception(
+                f"could not get title for video '{self.url}'. Continuing without", e
+            )
+            return None
+
+    @abc.abstractmethod
+    def parse_title_from_soup(self, soup: BeautifulSoup):
+        pass
+
+
+class YoutubeMetaFetcher(SongMetaFetcher):
+    def __init__(self, url: str):
+        super().__init__(url)
+
+    def get_video_id(self) -> str:
+        pattern = r"(?:v=|\/)([0-9A-Za-z_-]{11}).*"
+        regex = re.compile(pattern)
+        results = regex.search(self.url)
+        if not results:
+            raise ValueError(f"No match for regex pattern {pattern} within {self.url}.")
+        return results.group(1)
+
+    def parse_title_from_soup(self, soup: BeautifulSoup):
+        return soup.find("title").string
+
+
+class VimeoMetaFetcher(SongMetaFetcher):
+    def __init__(self, url: str):
+        super().__init__(url)
+
+    def get_video_id(self) -> str:
+        pattern = r"(?:http:|https:|)\/\/(?:player.|www.)?vimeo\.com\/(?:video\/|embed\/|watch\?\S*v=|v\/)?(\d*)"
+        regex = re.compile(pattern)
+        results = regex.search(self.url)
+        if not results:
+            raise ValueError(f"No match for regex pattern {pattern} within {self.url}.")
+        return results.group(1)
+
+    def parse_title_from_soup(self, soup: BeautifulSoup):
+        return soup.find("title").string
+
+
+class SoundcloudMetaFetcher(SongMetaFetcher):
+    def __init__(self, url: str):
+        super().__init__(url)
+
+    def get_video_id(self) -> str:
+        return f"{self.url.split('/')[-2]}/{self.url.split('/')[-1]}"
+
+    def parse_title_from_soup(self, soup: BeautifulSoup):
+        return soup.find("title").string
+
+
 class Songbird(commands.Cog):
     def __init__(self, config: config.PigBotSettings, bot: Bot) -> None:
         logger.info(f"initializing songbird api")
@@ -203,27 +278,6 @@ class Songbird(commands.Cog):
                 logger.info(f"watch_id={watch_id} found on disk: {song}")
                 return song.replace(f".{self.song_format}", "")
 
-    def _get_video_id(self, url: str) -> str:
-        pattern = r"(?:v=|\/)([0-9A-Za-z_-]{11}).*"
-        regex = re.compile(pattern)
-        results = regex.search(url)
-        if not results:
-            raise ValueError(f"No match for regex pattern {pattern} within {url}.")
-        return results.group(1)
-
-    def _get_video_title(self, url: str) -> Optional[str]:
-        try:
-            r = requests.get(url)
-            soup = BeautifulSoup(r.text, "html.parser")
-            link = soup.find_all(name="title")[0]
-            return link.text
-
-        except Exception as e:
-            logger.exception(
-                f"could not get title for video '{url}'. Continuing without", e
-            )
-            return None
-
     async def get_song(self, url: str) -> Optional[str]:
         """downloads a song from youtube if not on disk,
         otherwise returns song from disk
@@ -235,7 +289,19 @@ class Songbird(commands.Cog):
         Returns:
             the file-path to the song, otherwise None if error occured.
         """
-        id = self._get_video_id(url)
+        if SongMetaProviders.YOUTUBE.value in url:
+            meta_fetcher = YoutubeMetaFetcher(url)
+        elif SongMetaProviders.VIMEO.value in url:
+            meta_fetcher = VimeoMetaFetcher(url)
+        elif SongMetaProviders.SOUNDCLOUD.value in url:
+            meta_fetcher = SoundcloudMetaFetcher(url)
+        else:
+            logger.error(
+                f"unsupported url {url} not one of expected providers {list(SongMetaProviders)}"
+            )
+            return None
+
+        id = meta_fetcher.get_video_id()
         song_path = os.path.join(self.downloads_folder, id)
         # query metadata db
         async with self.meta_db_lock:
@@ -259,8 +325,8 @@ class Songbird(commands.Cog):
         async with self.meta_db_lock:
             success = self.meta_db.add_song_meta(
                 id=id,
-                song_meta=YoutubeMeta(
-                    url=url, title=self._get_video_title(url), file_path=result_path
+                song_meta=SongMeta(
+                    url=url, title=meta_fetcher.get_video_title(), file_path=result_path
                 ),
             )
             if not success:
@@ -342,7 +408,7 @@ class Songbird(commands.Cog):
         if not song_path:
             msg = f"An error occured while trying to obtain a song for url '{url}'."
             logger.error(msg)
-            return ctx.followup.send(msg)
+            return await ctx.respond(msg)
 
         # assert before playing that another song isn't playing.
         if ctx.voice_client.is_playing():
@@ -355,7 +421,7 @@ class Songbird(commands.Cog):
     @option(
         "url",
         type=str,
-        description="url of song to play. If unspecified, next song in queue is played.",
+        description="url of song to play (youtube, vimeo, or soundcloud). If unspecified, next song in queue is played.",
     )
     @option("search", type=str, autocomplete=_get_url_from_title)
     async def play(self, ctx, url: str = "", search: str = ""):
