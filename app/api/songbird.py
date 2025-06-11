@@ -158,10 +158,12 @@ async def _get_url_from_title(ctx: AutocompleteContext):
         logger.exception(f"error while attempting autocomplete: ", e)
         return []
 
+
 class SongMetaProviders(enum.StrEnum):
     YOUTUBE = "youtube"
     VIMEO = "vimeo"
     SOUNDCLOUD = "soundcloud"
+
 
 class SongMetaFetcher(abc.ABC):
     def __init__(self, url: str):
@@ -183,9 +185,10 @@ class SongMetaFetcher(abc.ABC):
             )
             return None
 
-    @abc.abstractmethod 
+    @abc.abstractmethod
     def parse_title_from_soup(self, soup: BeautifulSoup):
         pass
+
 
 class YoutubeMetaFetcher(SongMetaFetcher):
     def __init__(self, url: str):
@@ -198,9 +201,10 @@ class YoutubeMetaFetcher(SongMetaFetcher):
         if not results:
             raise ValueError(f"No match for regex pattern {pattern} within {self.url}.")
         return results.group(1)
-    
+
     def parse_title_from_soup(self, soup: BeautifulSoup):
-        return soup.find('title').string
+        return soup.find("title").string
+
 
 class VimeoMetaFetcher(SongMetaFetcher):
     def __init__(self, url: str):
@@ -213,9 +217,10 @@ class VimeoMetaFetcher(SongMetaFetcher):
         if not results:
             raise ValueError(f"No match for regex pattern {pattern} within {self.url}.")
         return results.group(1)
-    
+
     def parse_title_from_soup(self, soup: BeautifulSoup):
-        return soup.find('title').string
+        return soup.find("title").string
+
 
 class SoundcloudMetaFetcher(SongMetaFetcher):
     def __init__(self, url: str):
@@ -223,9 +228,10 @@ class SoundcloudMetaFetcher(SongMetaFetcher):
 
     def get_video_id(self) -> str:
         return f"{self.url.split('/')[-2]}/{self.url.split('/')[-1]}"
-    
+
     def parse_title_from_soup(self, soup: BeautifulSoup):
-        return soup.find('title').string
+        return soup.find("title").string
+
 
 class Songbird(commands.Cog):
     def __init__(self, config: config.PigBotSettings, bot: Bot) -> None:
@@ -290,7 +296,9 @@ class Songbird(commands.Cog):
         elif SongMetaProviders.SOUNDCLOUD.value in url:
             meta_fetcher = SoundcloudMetaFetcher(url)
         else:
-            logger.error(f"unsupported url {url} not one of expected providers {list(SongMetaProviders)}")
+            logger.error(
+                f"unsupported url {url} not one of expected providers {list(SongMetaProviders)}"
+            )
             return None
 
         id = meta_fetcher.get_video_id()
