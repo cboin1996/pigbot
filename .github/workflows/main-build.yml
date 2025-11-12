@@ -8,13 +8,8 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     env:
-      DOCKER_REGISTRY: docker.io
-      DOCKER_IMAGE: cboin/pigbot
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      DOCKER_TARGET_PLATFORM_ARM: linux/arm64/v8
-      DOCKER_TARGET_PLATFORM_x64: linux/amd64
-      DOCKER_PUSH: false
     steps:
       - uses: actions/checkout@main
       - name: Get Commit or Tag
@@ -40,19 +35,21 @@ jobs:
         if: success()
         run: |
           echo "${DOCKER_PASSWORD}" | docker login ${DOCKER_REGISTRY} --username "${DOCKER_USERNAME}" --password-stdin
-      - name: Run Buildx
+      - name: Build
         if: success()  && github.event_name == 'pull_request' # trigger only a build on PR's.
-        run: |
-          docker buildx build \
-          --platform ${{ steps.prepare.outputs.DOCKER_PLATFORM_ARM }},${{ steps.prepare.outputs.DOCKER_PLATFORM_AMD64 }} \
-          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:${{steps.prepare.outputs.VERSION}} \
-          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:latest \
-          --file ./Dockerfile -o type=image,push=false .
-      - name: Run Buildx (push image)
-        if: success()  && github.event_name == 'push' # trigger a build and push to docker registry
-        run: |
-          docker buildx build \
-          --platform ${{ steps.prepare.outputs.DOCKER_PLATFORM_ARM }},${{ steps.prepare.outputs.DOCKER_PLATFORM_AMD64 }} \
-          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:${{steps.prepare.outputs.VERSION}} \
-          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:latest \
-          --file ./Dockerfile -o type=image,push=true .
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: cboin/pigbot:latest,cboin/pigbot:${{steps.vars.outputs.TAG}}
+          cache-from: type=registry,ref=cboin/pigbot:buildcache
+          cache-to: type=registry,ref=cboin/pigbot:buildcache,mode=max
+      - name: Build and Push
+        if: success() && (github.event_name == 'push' || startsWith(github.ref, 'refs/tags/'))  # only trigger a build and push to docker registry on tag or commit sha off
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: cboin/pigbot:latest,cboin/pigbot:${{steps.vars.outputs.TAG}}
+          cache-from: type=registry,ref=cboin/pigbot:buildcache
+          cache-to: type=registry,ref=cboin/pigbot:buildcache,mode=max
