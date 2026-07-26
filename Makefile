@@ -19,6 +19,10 @@ lint:
 test:
 	uv run pytest tests/ -v
 
+.PHONY: run-local
+run-local:
+	cd $(APP_ROOT) && env $(shell grep -v '^#' $(ENV).env | xargs) uv run python3 main.py --log-level debug
+
 .PHONY: build
 build:
 	docker build -t $(APP_NAME):$(VERSION) .

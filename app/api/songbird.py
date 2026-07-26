@@ -16,6 +16,7 @@ from discord import (
     Bot,
     Embed,
     FFmpegPCMAudio,
+    OptionChoice,
     PCMVolumeTransformer,
     option,
     slash_command,
@@ -147,10 +148,8 @@ async def _get_url_from_title(ctx: AutocompleteContext):
             for terminator in match_terminators:
                 async with db_lock:
                     song_meta = db.get_song_meta(terminator)
-                output_to_user.append(
-                    f"{song_meta.url}{SONG_MATCH_SPLIT_KEY}{song_meta.title}"[:97]
-                    + "..."
-                )
+                name = (song_meta.title or song_meta.url)[:100]
+                output_to_user.append(OptionChoice(name=name, value=song_meta.url))
                 logger.info(f"output to user = {output_to_user}")
 
         return output_to_user
@@ -290,6 +289,7 @@ class Songbird(commands.Cog):
             the file-path to the song, otherwise None if error occured.
         """
         if SongMetaProviders.YOUTUBE.value in url:
+            url = url.split("&list")[0]
             meta_fetcher = YoutubeMetaFetcher(url)
         elif SongMetaProviders.VIMEO.value in url:
             meta_fetcher = VimeoMetaFetcher(url)
@@ -376,23 +376,19 @@ class Songbird(commands.Cog):
 
     async def _play(self, ctx, url: str = ""):
         """routes play command to various tasks."""
-        # base condition
         if ctx.voice_client is None:
-            if ctx.author.voice:  # pyright: ignore
-                await ctx.author.voice.channel.connect()  # pyright: ignore
-            else:
+            if not ctx.author.voice:  # pyright: ignore
                 await ctx.respond(
                     "You must be connected to a voice channel to use 'play'."
                 )
                 raise commands.CommandError("Author not connected to a voice channel.")
-
-        if ctx.voice_client.is_playing():  # pyright: ignore
-            # queue song if url provided
+            await ctx.defer()
+            await ctx.author.voice.channel.connect()  # pyright: ignore
+        elif ctx.voice_client.is_playing():  # pyright: ignore
             await self.enqueue(ctx.respond, url)
             return
-
-        # ctx.defer expects followup
-        await ctx.defer()
+        else:
+            await ctx.defer()
         # check if song is in queue if no url provided
         if url == "":
             if len(self.queue) == 0:
@@ -429,7 +425,7 @@ class Songbird(commands.Cog):
         if url != "":
             await self._play(ctx, url)
         if search != "":
-            await self._play(ctx, search.split(SONG_MATCH_SPLIT_KEY)[0])
+            await self._play(ctx, search)
 
     @slash_command(description="skip current song.")
     async def next(self, ctx):
