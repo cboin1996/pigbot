@@ -1,3 +1,5 @@
 *
 !app
+!pyproject.toml
+!uv.lock
 app/downloads
