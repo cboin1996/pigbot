@@ -1,17 +1,35 @@
-FROM ubuntu:24.04
-# Install necessary packages.
-# Including rm -rf /var/lib/apt/lists/* saves memory by removing
-# cached items related to the upgrade command
-ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update -y && apt-get -y upgrade \
-    && apt-get install -y python3-pip python3-venv ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+ARG UBUNTU_VERSION="24.04"
+FROM ubuntu:${UBUNTU_VERSION} AS builder
 
-WORKDIR /app
-COPY app .
-RUN python3 -m venv venv
-RUN ./venv/bin/pip install --upgrade pip && ./venv/bin/pip install -r requirements.txt
-# Run as non-root user:
-RUN useradd --create-home appuser
+WORKDIR /pigbot
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential gcc git python3 && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+
+FROM ubuntu:${UBUNTU_VERSION} AS build-image
+
+WORKDIR /pigbot
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates python3 ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /pigbot/.venv /pigbot/.venv
+COPY ./app/ ./app/
+COPY pyproject.toml uv.lock ./
+
+ENV PATH="/pigbot/.venv/bin:$PATH"
+
+RUN useradd --create-home appuser && \
+    mkdir -p /pigbot/app/downloads && \
+    chown -R appuser:appuser /pigbot
 USER appuser
-ENTRYPOINT ["./venv/bin/python3", "main.py"]
+
+WORKDIR /pigbot/app
+ENTRYPOINT ["python3", "main.py"]
