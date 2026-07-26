@@ -42,69 +42,48 @@ Note any env vars with a `None` default value are needed to run the server.
 
 ## Development
 
-Setup your virtual environment:
+Setup your environment:
 
 ```bash
-task setup
-source venv/bin/activate
-task install-deps
+make setup
 ```
 
-Use the following vscode launch config:
-
-```json
-{
-    "configurations": [
-        {
-            "name": "test-minecraft",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/app/main.py",
-            "envFile": "${workspaceFolder}/test.env"
-        },
-        {
-            "name": "debug-songbird",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/app/main.py",
-            "env": {
-                "ENV":"songbird",
-                "PIGBOT_TOKEN": "",
-                "PIGBOT_MINECRAFT_ENABLE":"false",
-                "PIGBOT_DALLE_ENABLE":"false",
-                "PIGBOT_SONGBIRD_ENABLE": "true"
-            }
-        }
-    ]
-}
-```
- 
-### Docker
-
-Or, alternatively,
-
-Build the image:
+Run locally (loads env from `<ENV>.env`):
 
 ```bash
-task build
+ENV=dev make run-local
 ```
 
-Run:
+Run tests:
 
 ```bash
-task run
-```
-
-Development (live reload docker builds):
-
-```bash
-task dev -w
+make test
 ```
 
 Lint:
 
 ```bash
-task lint
+make lint
+```
+
+### Docker
+
+Build the image:
+
+```bash
+make build
+```
+
+Run (loads env from `<ENV>.env`, mounts `app/downloads/` for shared song cache):
+
+```bash
+ENV=dev make run
+```
+
+Build and run:
+
+```bash
+ENV=dev make dev
 ```
 
 ### Configuring a custom bot with permissions

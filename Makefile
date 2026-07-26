@@ -29,7 +29,7 @@ build:
 
 .PHONY: run
 run:
-	docker run --rm --name $(APP_NAME) -v /tmp:/app/downloads -p 443:8443 --env-file $(ENV).env $(APP_NAME):$(VERSION) --log-level debug
+	docker run --rm --name $(APP_NAME) -v $(PWD)/app/downloads:/pigbot/app/downloads -p 443:8443 --env-file $(ENV).env $(APP_NAME):$(VERSION) --log-level debug
 
 .PHONY: dev
 dev: build run
