@@ -15,7 +15,7 @@ dependencies = [
     "aiohttp",
     "beautifulsoup4",
     "mcstatus",
-    "py-cord",
+    "py-cord[voice]",
     "pydantic",
     "pydantic-settings",
     "python-dotenv",
