@@ -11,31 +11,23 @@ version = "0.2.1"
 description = "discord bot with some fun features"
 readme = "README.md"
 requires-python = ">=3.11"
-dynamic = ["dependencies"]
-
-[tool.setuptools.dynamic]
-dependencies = {file = ["pigbot/requirements.txt"]}
+dependencies = [
+    "aiohttp",
+    "beautifulsoup4",
+    "mcstatus",
+    "py-cord",
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv",
+    "requests",
+    "songbirdcore",
+]
 
 [project.optional-dependencies]
-# these dependencies are required for development,
-# not for running the package.
 dev = [
-    # lint
     "black",
-    "click",
-    "isort",
-    # test
     "pytest",
     "pytest-cov",
-    # docs
-    "mkdocs",
-    "mkdocs-material",
-    "mike",
-    "mkdocstrings-python"
-]
-package = [
-    "build",
-    "twine"
 ]
 
 [tool.setuptools.packages.find]
