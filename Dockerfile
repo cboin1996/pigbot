@@ -17,7 +17,7 @@ WORKDIR /pigbot
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-RUN apt-get update && apt-get install -y --no-install-recommends python3 ffmpeg && \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates python3 ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /pigbot/.venv /pigbot/.venv
