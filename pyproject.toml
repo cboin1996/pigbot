@@ -30,5 +30,8 @@ dev = [
     "pytest-cov",
 ]
 
+[tool.black]
+target-version = ["py312"]
+
 [tool.setuptools.packages.find]
 exclude = ["junit"]

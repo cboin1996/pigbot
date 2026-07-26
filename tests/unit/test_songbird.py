@@ -8,8 +8,8 @@ from api.songbird import (
     SongMeta,
 )
 
-
 # --- URL parsers ---
+
 
 class TestYoutubeMetaFetcher:
     def test_standard_url(self):
@@ -49,20 +49,35 @@ class TestSoundcloudMetaFetcher:
 
 # --- playlist strip ---
 
-@pytest.mark.parametrize("url,expected", [
-    ("https://www.youtube.com/watch?v=abc123&list=PLxyz", "https://www.youtube.com/watch?v=abc123"),
-    ("https://www.youtube.com/watch?v=abc123", "https://www.youtube.com/watch?v=abc123"),
-])
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        (
+            "https://www.youtube.com/watch?v=abc123&list=PLxyz",
+            "https://www.youtube.com/watch?v=abc123",
+        ),
+        (
+            "https://www.youtube.com/watch?v=abc123",
+            "https://www.youtube.com/watch?v=abc123",
+        ),
+    ],
+)
 def test_playlist_strip(url, expected):
     assert url.split("&list")[0] == expected
 
 
 # --- MetaDbManager ---
 
+
 def test_metadb_add_and_get(tmp_path):
     path = tmp_path / "metadb.json"
     db = MetaDbManager(str(path))
-    meta = SongMeta(url="https://youtube.com/watch?v=abc", file_path="/tmp/abc.mp3", title="Test Song")
+    meta = SongMeta(
+        url="https://youtube.com/watch?v=abc",
+        file_path="/tmp/abc.mp3",
+        title="Test Song",
+    )
     db.add_song_meta("abc", meta)
     result = db.get_song_meta("abc")
     assert result is not None
@@ -79,7 +94,11 @@ def test_metadb_get_missing(tmp_path):
 def test_metadb_trie_populated(tmp_path):
     path = tmp_path / "metadb.json"
     db = MetaDbManager(str(path))
-    meta = SongMeta(url="https://youtube.com/watch?v=abc", file_path="/tmp/abc.mp3", title="Bohemian Rhapsody")
+    meta = SongMeta(
+        url="https://youtube.com/watch?v=abc",
+        file_path="/tmp/abc.mp3",
+        title="Bohemian Rhapsody",
+    )
     db.add_song_meta("abc", meta)
     matches = db.trie.starts_with("Bohem")
     assert matches is not None
@@ -89,7 +108,9 @@ def test_metadb_trie_populated(tmp_path):
 def test_metadb_persists(tmp_path):
     path = tmp_path / "metadb.json"
     db = MetaDbManager(str(path))
-    meta = SongMeta(url="https://youtube.com/watch?v=xyz", file_path="/tmp/xyz.mp3", title="Song")
+    meta = SongMeta(
+        url="https://youtube.com/watch?v=xyz", file_path="/tmp/xyz.mp3", title="Song"
+    )
     db.add_song_meta("xyz", meta)
 
     db2 = MetaDbManager(str(path))

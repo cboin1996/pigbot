@@ -148,8 +148,14 @@ async def _get_url_from_title(ctx: AutocompleteContext):
             for terminator in match_terminators:
                 async with db_lock:
                     song_meta = db.get_song_meta(terminator)
-                name = (song_meta.title or song_meta.url)[:100]
-                output_to_user.append(OptionChoice(name=name, value=song_meta.url))
+                label = (
+                    f"{song_meta.title} | {song_meta.url}"
+                    if song_meta.title
+                    else song_meta.url
+                )
+                output_to_user.append(
+                    OptionChoice(name=label[:100], value=song_meta.url)
+                )
                 logger.info(f"output to user = {output_to_user}")
 
         return output_to_user
