@@ -2,57 +2,46 @@ name: Docker Build/Publish Image
 on:
   push:
     branches: [main]
+    tags: '*'
   pull_request:
     branches: [main]
 jobs:
   build:
-    runs-on: ubuntu-24.04
-    env:
-      DOCKER_REGISTRY: docker.io
-      DOCKER_IMAGE: cboin/pigbot
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      DOCKER_TARGET_PLATFORM_ARM: linux/arm64/v8
-      DOCKER_TARGET_PLATFORM_x64: linux/amd64
-      DOCKER_PUSH: false
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@main
+      - uses: actions/checkout@v4
       - name: Get Commit or Tag
         id: vars
         run: |
           tag="${GITHUB_SHA:0:8}"
-          if [ "${GITHUB_EVENT_NAME}" == "release" ]; then
-            ref="${GITHUB_REF}"
+          if [[ ${GITHUB_REF} == refs/tags* ]]; then
             tag=$(echo $GITHUB_REF | sed 's/refs\/tags\///g')
           fi
           echo "TAG=$tag" >> $GITHUB_OUTPUT
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Prepare
-        if: success()
-        id: prepare
-        run: |
-          echo "DOCKER_PLATFORM_ARM=${DOCKER_TARGET_PLATFORM_ARM}" >> $GITHUB_OUTPUT
-          echo "DOCKER_PLATFORM_AMD64=${DOCKER_TARGET_PLATFORM_x64}" >> $GITHUB_OUTPUT
-          echo "DOCKER_IMAGE=${DOCKER_REGISTRY}/${DOCKER_IMAGE}" >> $GITHUB_OUTPUT
-          echo "VERSION=${{steps.vars.outputs.tag}}" >> $GITHUB_OUTPUT
-      - name: Docker Login
-        if: success()
-        run: |
-          echo "${DOCKER_PASSWORD}" | docker login ${DOCKER_REGISTRY} --username "${DOCKER_USERNAME}" --password-stdin
-      - name: Run Buildx
-        if: success()  && github.event_name == 'pull_request' # trigger only a build on PR's.
-        run: |
-          docker buildx build \
-          --platform ${{ steps.prepare.outputs.DOCKER_PLATFORM_ARM }},${{ steps.prepare.outputs.DOCKER_PLATFORM_AMD64 }} \
-          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:${{steps.prepare.outputs.VERSION}} \
-          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:latest \
-          --file ./Dockerfile -o type=image,push=false .
-      - name: Run Buildx (push image)
-        if: success()  && github.event_name == 'push' # trigger a build and push to docker registry
-        run: |
-          docker buildx build \
-          --platform ${{ steps.prepare.outputs.DOCKER_PLATFORM_ARM }},${{ steps.prepare.outputs.DOCKER_PLATFORM_AMD64 }} \
-          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:${{steps.prepare.outputs.VERSION}} \
-          -t ${{ steps.prepare.outputs.DOCKER_IMAGE }}:latest \
-          --file ./Dockerfile -o type=image,push=true .
+      - name: Build
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: cboin/pigbot:latest,cboin/pigbot:${{ steps.vars.outputs.TAG }}
+          cache-from: type=registry,ref=cboin/pigbot:buildcache
+          cache-to: type=registry,ref=cboin/pigbot:buildcache,mode=max
+      - name: Build and Push
+        if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/')
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: cboin/pigbot:latest,cboin/pigbot:${{ steps.vars.outputs.TAG }}
+          cache-from: type=registry,ref=cboin/pigbot:buildcache
+          cache-to: type=registry,ref=cboin/pigbot:buildcache,mode=max
