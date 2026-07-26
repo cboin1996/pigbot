@@ -26,7 +26,9 @@ COPY pyproject.toml uv.lock ./
 
 ENV PATH="/pigbot/.venv/bin:$PATH"
 
-RUN useradd --create-home appuser
+RUN useradd --create-home appuser && \
+    mkdir -p /pigbot/app/downloads && \
+    chown -R appuser:appuser /pigbot
 USER appuser
 
 WORKDIR /pigbot/app
